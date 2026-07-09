@@ -9,19 +9,26 @@ const supabase = createClient(
 const SOURCES = [
   {
     slug: "openai",
+    type: "rss",
     url: "https://openai.com/news/rss.xml"
   },
   {
     slug: "gemini",
-    url: "https://ai.google.dev/gemini-api/docs/changelog"
+    type: "manual",
+    url: "https://ai.google.dev/gemini-api/docs/changelog",
+    title: "Gemini API Changelog"
   },
   {
     slug: "claude",
-    url: "https://platform.claude.com/docs/en/release-notes/overview"
+    type: "manual",
+    url: "https://platform.claude.com/docs/en/release-notes/overview",
+    title: "Claude Platform Release Notes"
   },
   {
     slug: "deepseek",
-    url: "https://api-docs.deepseek.com/updates"
+    type: "manual",
+    url: "https://api-docs.deepseek.com/updates",
+    title: "DeepSeek API Change Log"
   }
 ];
 
@@ -29,45 +36,82 @@ function hashText(text) {
   return crypto.createHash("sha256").update(text).digest("hex");
 }
 
-function cleanText(text) {
+function stripTags(text = "") {
   return text
+    .replace(/<!\[CDATA\[(.*?)\]\]>/gs, "$1")
     .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function extractSimpleItems(html, source) {
-  const text = cleanText(html);
+function getTag(block, tag) {
+  const match = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
+  return match ? stripTags(match[1]) : "";
+}
 
+function parseRss(xml, source) {
+  const items = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)]
+    .slice(0, 5)
+    .map(match => {
+      const block = match[0];
+
+      const title = getTag(block, "title") || "Untitled update";
+      const link = getTag(block, "link") || source.url;
+      const pubDate = getTag(block, "pubDate");
+      const description = getTag(block, "description");
+
+      return {
+        source_slug: source.slug,
+        title,
+        url: link,
+        published_at: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+        summary: description.slice(0, 260),
+        hash: hashText(source.slug + title + link)
+      };
+    });
+
+  return items;
+}
+
+function parseManual(source) {
   return [{
     source_slug: source.slug,
-    title: text.slice(0, 120) || `${source.slug} update`,
+    title: source.title,
     url: source.url,
     published_at: new Date().toISOString(),
-    summary: text.slice(0, 280),
-    hash: hashText(source.slug + source.url + text.slice(0, 300))
+    summary: "Official update source. Detailed item extraction will be added in the next version.",
+    hash: hashText(source.slug + source.url + new Date().toISOString().slice(0, 10))
   }];
 }
 
 export default async function handler(req, res) {
-  const saved = [];
+  const results = [];
 
   for (const source of SOURCES) {
     try {
       const response = await fetch(source.url);
-      const html = await response.text();
-      const items = extractSimpleItems(html, source);
+      const text = await response.text();
+
+      const items = source.type === "rss"
+        ? parseRss(text, source)
+        : parseManual(source);
 
       for (const item of items) {
         const { error } = await supabase
           .from("updates")
           .upsert(item, { onConflict: "hash" });
 
-        if (!error) saved.push(item);
+        results.push({
+          source: source.slug,
+          title: item.title,
+          status: error ? "failed" : "saved",
+          error: error?.message || null
+        });
       }
     } catch (err) {
-      saved.push({
-        source_slug: source.slug,
+      results.push({
+        source: source.slug,
+        status: "failed",
         error: err.message
       });
     }
@@ -75,7 +119,6 @@ export default async function handler(req, res) {
 
   res.status(200).json({
     message: "Refresh completed",
-    count: saved.length,
-    saved
+    results
   });
 }
