@@ -84,6 +84,50 @@ function parseManual(source) {
   }];
 }
 
+function extractByDateBlocks(html, source) {
+  const text = stripTags(html)
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const dateRegex =
+    /(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},\s+\d{4}/gi;
+
+  const matches = [...text.matchAll(dateRegex)];
+
+  if (!matches.length) {
+    return [{
+      source_slug: source.slug,
+      title: source.title,
+      url: source.url,
+      published_at: new Date().toISOString(),
+      summary: "Could not detect individual changelog entries yet.",
+      hash: hashText(source.slug + source.url + "fallback")
+    }];
+  }
+
+  return matches.slice(0, 5).map((match, index) => {
+    const start = match.index;
+    const end = matches[index + 1]?.index || text.length;
+
+    const block = text.slice(start, end).trim();
+    const dateText = match[0];
+
+    const summary = block
+      .replace(dateText, "")
+      .trim()
+      .slice(0, 260);
+
+    return {
+      source_slug: source.slug,
+      title: `${source.title} - ${dateText}`,
+      url: source.url,
+      published_at: new Date(dateText).toISOString(),
+      summary,
+      hash: hashText(source.slug + source.url + dateText + summary.slice(0, 80))
+    };
+  });
+}
+
 export default async function handler(req, res) {
   const results = [];
 
@@ -92,9 +136,9 @@ export default async function handler(req, res) {
       const response = await fetch(source.url);
       const text = await response.text();
 
-      const items = source.type === "rss"
+        const items = source.type === "rss"
         ? parseRss(text, source)
-        : parseManual(source);
+        : extractByDateBlocks(text, source);
 
       for (const item of items) {
         const { error } = await supabase
