@@ -89,7 +89,7 @@ export function parseGeminiChangelog(html) {
       title,
       date,
       summary,
-      tags: ["API"],
+      tags: classifyGeminiTags(title, summary),
       sourceUrl
     };
 
@@ -182,6 +182,80 @@ function formatListAsText($, list, depth = 0) {
   });
 
   return lines.join("\n").trim();
+}
+
+function classifyGeminiTags(title, summary) {
+  const text = `${title} ${summary}`.toLowerCase();
+  const tags = ["API"];
+
+  if (
+    text.includes("deprecated") ||
+    text.includes("deprecation") ||
+    text.includes("sunset") ||
+    text.includes("retired") ||
+    text.includes("discontinued")
+  ) {
+    tags.push("Deprecated");
+  }
+
+  if (
+    text.includes("pricing") ||
+    text.includes("price") ||
+    text.includes("billing") ||
+    text.includes("cost")
+  ) {
+    tags.push("Pricing");
+  }
+
+  if (
+    text.includes("fixed") ||
+    text.includes("bug fix") ||
+    text.includes("resolved") ||
+    text.includes("issue")
+  ) {
+    tags.push("Fixed");
+  }
+
+  if (
+    text.includes("model") ||
+    text.includes("flash") ||
+    text.includes("gemini pro") ||
+    text.includes("gemini ultra") ||
+    text.includes("preview model")
+  ) {
+    tags.push("Model update");
+  }
+
+  if (
+    text.includes("new feature") ||
+    text.includes("launched") ||
+    text.includes("introduced") ||
+    text.includes("now available") ||
+    text.includes("added support")
+  ) {
+    tags.push("New feature");
+  }
+
+  if (
+    text.includes("improved") ||
+    text.includes("improvement") ||
+    text.includes("faster") ||
+    text.includes("latency") ||
+    text.includes("performance")
+  ) {
+    tags.push("Improvement");
+  }
+
+  if (
+    text.includes("safety") ||
+    text.includes("responsible ai") ||
+    text.includes("content filter") ||
+    text.includes("harm category")
+  ) {
+    tags.push("Safety");
+  }
+
+  return [...new Set(tags)];
 }
 
 function firstWords(value, count) {
