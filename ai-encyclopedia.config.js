@@ -159,7 +159,7 @@ window.AI_ENCYCLOPEDIA_CONFIG = {
       "description": "Claude product, model and developer platform updates.",
       "api": {
         "id": "anthropic_API",
-        "endpoint": ""
+        "endpoint": "/api/anthropic.js"
       },
       "previewEntries": [
         {
