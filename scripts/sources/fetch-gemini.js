@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 
-export const GEMINI_CHANGELOG_URL = "https://ai.google.dev/gemini-api/docs/changelog";
+export const GEMINI_CHANGELOG_URL = "https://ai.google.dev/gemini-api/docs/changelog?hl=en";
 
 const DATE_PATTERN = /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}$/;
 
@@ -29,7 +29,8 @@ export async function fetchGeminiChangelog(options = {}) {
   const response = await fetchImpl(GEMINI_CHANGELOG_URL, {
     headers: {
       Accept: "text/html,application/xhtml+xml",
-      "User-Agent": "Mini-AI-Encyclopedia/1.0 (scheduled public changelog reader)"
+      "Accept-Language": "en-US,en;q=0.9",
+      "User-Agent": "Mini-AI-Encyclopedia/1.1"
     }
   });
 
