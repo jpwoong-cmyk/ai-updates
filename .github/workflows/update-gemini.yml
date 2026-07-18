@@ -1,0 +1,50 @@
+name: Update Gemini changelog
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "59 23 * * *"
+      timezone: "Asia/Singapore"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-gemini-changelog
+  cancel-in-progress: false
+
+jobs:
+  update-gemini:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --package-lock=false --no-audit --no-fund
+
+      - name: Test Gemini parser
+        run: npm run test:gemini
+
+      - name: Fetch Gemini release notes
+        run: npm run update:gemini
+
+      - name: Commit changed Gemini data
+        shell: bash
+        run: |
+          if git diff --quiet -- data/gemini.json; then
+            echo "No Gemini changelog changes detected."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/gemini.json
+          git commit -m "data: update Gemini changelog"
+          git push
