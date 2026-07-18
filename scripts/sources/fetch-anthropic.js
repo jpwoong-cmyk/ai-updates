@@ -5,6 +5,8 @@ export const ANTHROPIC_CHANGELOG_URL =
 
 const DATE_PATTERN = /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?,\s+\d{4}$/i;
 
+const MONTH_HEADING_PATTERN = /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}$/i;
+
 const MONTHS = {
   january: "01",
   february: "02",
@@ -68,7 +70,7 @@ export function parseAnthropicChangelog(html) {
       return;
     }
 
-    const contentNodes = findReleaseContent($, headingNode);
+    const contentNodes = findReleaseContent($, articleRoot, headingNode);
     const summary = formatReleaseContent($, contentNodes);
 
     if (!summary) {
@@ -139,20 +141,144 @@ function findDateHeadings($, root) {
   });
 }
 
-function findReleaseContent($, headingNode) {
+function findReleaseContent($, articleRoot, headingNode) {
   const nodes = [];
-  let cursor = headingNode.next();
+  const selectedNodes = new Set();
+  const candidates = articleRoot.find("*").toArray();
+  const headingIndex = candidates.indexOf(headingNode.get(0));
 
-  while (cursor.length) {
-    if (isDateHeading($, cursor)) {
+  if (headingIndex === -1) {
+    return nodes;
+  }
+
+  for (let index = headingIndex + 1; index < candidates.length; index += 1) {
+    const candidateNode = candidates[index];
+    const candidate = $(candidateNode);
+
+    if (isDescendantOf(candidateNode, headingNode.get(0))) {
+      continue;
+    }
+
+    if (isDateHeading($, candidate)) {
       break;
     }
 
-    collectMeaningfulNodes($, cursor, nodes);
-    cursor = cursor.next();
+    if (hasSelectedAncestor(candidateNode, selectedNodes)) {
+      continue;
+    }
+
+    if (candidate.is("script, style, nav, footer, form, button, svg, noscript")) {
+      continue;
+    }
+
+    const candidateText = cleanText(candidate.attr("data-text") || candidate.text());
+
+    // Month separators and page furniture are not part of a dated update.
+    if (candidate.is("h1, h2, h3")) {
+      if (MONTH_HEADING_PATTERN.test(candidateText)) {
+        continue;
+      }
+
+      if (/^(related articles|table of contents|did this answer your question\??)$/i.test(candidateText)) {
+        break;
+      }
+
+      continue;
+    }
+
+    // Never collect a wrapper that also contains a later date heading.
+    const containsDateHeading = candidate.find("h2, h3, h4").filter(function () {
+      return DATE_PATTERN.test(cleanText($(this).attr("data-text") || $(this).text()));
+    }).length > 0;
+
+    if (containsDateHeading) {
+      continue;
+    }
+
+    if (candidate.is("ul, ol")) {
+      if (!candidate.parents("ul, ol").length) {
+        nodes.push(candidateNode);
+        selectedNodes.add(candidateNode);
+      }
+      continue;
+    }
+
+    const className = String(candidate.attr("class") || "").toLowerCase();
+    const testId = String(candidate.attr("data-testid") || "").toLowerCase();
+    const isIntercomTextBlock =
+      className.includes("intercom-interblocks-paragraph") ||
+      className.includes("intercom-interblocks-heading") ||
+      className.includes("article__body") ||
+      testId.includes("paragraph") ||
+      testId.includes("heading");
+
+    const isSemanticTextBlock = candidate.is("p, h4, h5, h6, blockquote, pre");
+
+    if ((isIntercomTextBlock || isSemanticTextBlock) && candidateText) {
+      nodes.push(candidateNode);
+      selectedNodes.add(candidateNode);
+      continue;
+    }
+
+    // Intercom sometimes renders article lines as plain divs with inline children.
+    // Capture those text blocks without depending on a provider-specific class name.
+    if (candidate.is("div, section")) {
+      const directText = cleanText(
+        candidate
+          .clone()
+          .children()
+          .remove()
+          .end()
+          .text()
+      );
+
+      const hasBlockChildren = candidate.children("div, section, p, ul, ol, h1, h2, h3, h4, h5, h6, blockquote").length > 0;
+
+      if ((directText || !hasBlockChildren) && candidateText) {
+        nodes.push(candidateNode);
+        selectedNodes.add(candidateNode);
+        continue;
+      }
+    }
+
+    // Final fallback for title text wrapped only in strong/span elements.
+    if (
+      candidate.is("strong, b, span") &&
+      candidateText &&
+      !candidate.parents("p, li, h4, h5, h6, blockquote").length
+    ) {
+      nodes.push(candidateNode);
+      selectedNodes.add(candidateNode);
+    }
   }
 
   return nodes;
+}
+
+function isDescendantOf(node, ancestor) {
+  let parent = node && node.parent;
+
+  while (parent) {
+    if (parent === ancestor) {
+      return true;
+    }
+    parent = parent.parent;
+  }
+
+  return false;
+}
+
+function hasSelectedAncestor(node, selectedNodes) {
+  let parent = node && node.parent;
+
+  while (parent) {
+    if (selectedNodes.has(parent)) {
+      return true;
+    }
+    parent = parent.parent;
+  }
+
+  return false;
 }
 
 function isDateHeading($, node) {
@@ -161,25 +287,6 @@ function isDateHeading($, node) {
   }
 
   return DATE_PATTERN.test(cleanText(node.attr("data-text") || node.text()));
-}
-
-function collectMeaningfulNodes($, node, output) {
-  if (node.is("script, style, nav, footer, form, button")) {
-    return;
-  }
-
-  if (node.is("h2, h3") && !isDateHeading($, node)) {
-    return;
-  }
-
-  if (node.is("p, h4, h5, h6, ul, ol, blockquote")) {
-    output.push(node.get(0));
-    return;
-  }
-
-  node.children().each(function () {
-    collectMeaningfulNodes($, $(this), output);
-  });
 }
 
 function formatReleaseContent($, nodes) {
