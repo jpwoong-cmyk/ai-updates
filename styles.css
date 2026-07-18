@@ -1979,3 +1979,65 @@ a:focus-visible {
     );
   }
 }
+
+/* ============================================================
+   CHANGELOG PAGINATION
+   ============================================================ */
+
+.changelogFeed {
+  scroll-margin-top: 96px;
+}
+
+.paginationControls {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) minmax(0, 1fr) minmax(120px, auto);
+  align-items: center;
+  gap: 18px;
+  padding: 26px 4px 8px;
+}
+
+.paginationButton {
+  min-height: 42px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 700;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.paginationButton:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.075);
+  transform: translateY(-2px);
+}
+
+.paginationButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.34;
+}
+
+.paginationStatus {
+  color: var(--muted-2);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+@media (max-width: 620px) {
+  .paginationControls {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .paginationStatus {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+}

@@ -1,11 +1,10 @@
 {
   "name": "mini-ai-encyclopedia",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
-  "description": "Static AI changelog archive with scheduled source adapters.",
+  "description": "Static AI changelog frontend with a cached Vercel Gemini source adapter.",
   "scripts": {
-    "update:gemini": "node scripts/update-gemini.js",
     "test:gemini": "node --test tests/fetch-gemini.test.js"
   },
   "engines": {

@@ -283,7 +283,7 @@ window.AI_ENCYCLOPEDIA_CONFIG = {
       "description": "Gemini model, app and API updates from Google.",
       "api": {
         "id": "gemini_API",
-        "endpoint": "./data/gemini.json"
+        "endpoint": "/api/gemini"
       },
       "previewEntries": [
         {

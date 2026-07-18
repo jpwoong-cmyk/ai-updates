@@ -12,7 +12,10 @@
     activeProviderId: getInitialProviderId(),
     activeTag: "All changes",
     sortOrder: "newest",
-    entriesByProvider: new Map()
+    currentPage: 1,
+    pageSize: 25,
+    entriesByProvider: new Map(),
+    loadErrorsByProvider: new Map()
   };
 
   let changeRowObserver = null;
@@ -36,6 +39,10 @@
     providerCount: document.getElementById("providerCount"),
     tagFilters: document.getElementById("tagFilters"),
     changelogFeed: document.getElementById("changelogFeed"),
+    paginationControls: document.getElementById("paginationControls"),
+    paginationStatus: document.getElementById("paginationStatus"),
+    previousPage: document.getElementById("previousPage"),
+    nextPage: document.getElementById("nextPage"),
     sortOrder: document.getElementById("sortOrder")
   };
 
@@ -74,8 +81,21 @@
   function bindEvents() {
     elements.sortOrder.addEventListener("change", function (event) {
       state.sortOrder = event.target.value;
+      state.currentPage = 1;
       renderArchive();
     });
+
+    if (elements.previousPage) {
+      elements.previousPage.addEventListener("click", function () {
+        changeArchivePage(state.currentPage - 1);
+      });
+    }
+
+    if (elements.nextPage) {
+      elements.nextPage.addEventListener("click", function () {
+        changeArchivePage(state.currentPage + 1);
+      });
+    }
 
     window.addEventListener("hashchange", function () {
       const providerId = getInitialProviderId();
@@ -403,6 +423,8 @@
     const clickedCurrentProvider = allowToggle && updateHash && state.activeProviderId === providerId;
     state.activeProviderId = providerExists && !clickedCurrentProvider ? providerId : null;
     state.activeTag = "All changes";
+    // Every hero orb and dock orb starts its provider at page one.
+    state.currentPage = 1;
 
     if (updateHash) {
       const cleanUrl = `${window.location.pathname}${window.location.search}`;
@@ -454,6 +476,7 @@
 
       button.addEventListener("click", function () {
         state.activeTag = tag;
+        state.currentPage = 1;
         renderTagFilters();
         renderArchive();
       });
@@ -473,6 +496,7 @@
   async function loadProviderData(provider) {
     // Every provider begins empty so failures never leave stale content behind.
     state.entriesByProvider.set(provider.id, []);
+    state.loadErrorsByProvider.delete(provider.id);
 
     const endpoint = provider.api && typeof provider.api.endpoint === "string"
       ? provider.api.endpoint.trim()
@@ -511,9 +535,16 @@
         .filter(Boolean);
 
       state.entriesByProvider.set(provider.id, items);
+
+      if (!items.length) {
+        state.loadErrorsByProvider.set(provider.id, "The configured source returned no changelog entries.");
+      }
     } catch (error) {
-      // Quiet failure: renderArchive will show the stable no-data message.
       state.entriesByProvider.set(provider.id, []);
+      state.loadErrorsByProvider.set(
+        provider.id,
+        error instanceof Error ? error.message : "The changelog source could not be loaded."
+      );
     }
   }
 
@@ -618,19 +649,86 @@
     elements.visibleUpdateCount.textContent = `${entries.length} update${entries.length === 1 ? "" : "s"}`;
 
     if (!entries.length) {
-      elements.changelogFeed.innerHTML = createNoDataMarkup(provider);
+      hidePagination();
+      elements.changelogFeed.innerHTML = createNoDataMarkup(
+        provider,
+        state.loadErrorsByProvider.get(provider.id) || ""
+      );
       return;
     }
+
+    const totalPages = Math.max(1, Math.ceil(entries.length / state.pageSize));
+    state.currentPage = Math.min(Math.max(1, state.currentPage), totalPages);
+
+    const startIndex = (state.currentPage - 1) * state.pageSize;
+    const pageEntries = entries.slice(startIndex, startIndex + state.pageSize);
 
     const list = document.createElement("div");
     list.className = "changelogList";
 
-    entries.forEach(function (entry) {
+    pageEntries.forEach(function (entry) {
       list.appendChild(createChangeRow(entry));
     });
 
     elements.changelogFeed.replaceChildren(list);
+    renderPagination(entries.length, totalPages, startIndex, pageEntries.length);
     observeChangeRows(list);
+  }
+
+  function renderPagination(totalEntries, totalPages, startIndex, visibleEntries) {
+    if (!elements.paginationControls || !elements.paginationStatus) {
+      return;
+    }
+
+    if (totalEntries <= state.pageSize) {
+      hidePagination();
+      return;
+    }
+
+    const firstVisible = startIndex + 1;
+    const lastVisible = startIndex + visibleEntries;
+
+    elements.paginationControls.hidden = false;
+    elements.paginationStatus.textContent =
+      `Showing ${firstVisible}–${lastVisible} of ${totalEntries} · Page ${state.currentPage} of ${totalPages}`;
+
+    elements.previousPage.disabled = state.currentPage <= 1;
+    elements.nextPage.disabled = state.currentPage >= totalPages;
+  }
+
+  function hidePagination() {
+    if (elements.paginationControls) {
+      elements.paginationControls.hidden = true;
+    }
+  }
+
+  function changeArchivePage(nextPage) {
+    const entries = getFilteredEntries();
+    const totalPages = Math.max(1, Math.ceil(entries.length / state.pageSize));
+    const safePage = Math.min(Math.max(1, nextPage), totalPages);
+
+    if (safePage === state.currentPage) {
+      return;
+    }
+
+    state.currentPage = safePage;
+    renderArchive();
+    scrollToChangelogStart();
+  }
+
+  function scrollToChangelogStart() {
+    if (!elements.changelogFeed) {
+      return;
+    }
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    window.requestAnimationFrame(function () {
+      elements.changelogFeed.scrollIntoView({
+        behavior: reducedMotion ? "auto" : "smooth",
+        block: "start"
+      });
+    });
   }
 
   function getFilteredEntries() {
@@ -902,9 +1000,16 @@
     }).format(new Date(timestamp));
   }
 
-  function createNoDataMarkup(provider) {
+  function createNoDataMarkup(provider, detail = "") {
     const apiId = provider && provider.api ? provider.api.id : "configured API slot";
     const providerName = provider ? provider.product || provider.name : "this AI";
+    const endpoint = provider && provider.api && typeof provider.api.endpoint === "string"
+      ? provider.api.endpoint.trim()
+      : "";
+
+    const message = endpoint
+      ? `${providerName} data could not be loaded from ${endpoint}.${detail ? ` ${detail}` : ""}`
+      : `No changelog endpoint is configured for ${providerName}. Add one to ${apiId} inside ai-encyclopedia.config.js.`;
 
     return `
       <section class="emptyState" role="status">
@@ -913,7 +1018,7 @@
         </div>
         <div>
           <h3>No data found</h3>
-          <p>No changelog entries are available for ${escapeHtml(providerName)}. Add an endpoint to <code>${escapeHtml(apiId)}</code> inside <code>ai-encyclopedia.config.js</code>.</p>
+          <p>${escapeHtml(message)}</p>
         </div>
       </section>
     `;
