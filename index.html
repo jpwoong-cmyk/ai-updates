@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="A modular encyclopedia for AI product changelogs." />
+  <title>Mini AI Encyclopedia</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <a class="skipLink" href="#changelogFeed">Skip to changelog</a>
+
+  <header class="siteHeader">
+    <div class="headerInner">
+      <a class="brand" href="#" aria-label="Mini AI Encyclopedia home">
+        <span class="brandMark" aria-hidden="true">AI</span>
+        <span class="brandText">
+          <strong>Mini AI Encyclopedia</strong>
+          <small>Tracking how intelligence evolves.</small>
+        </span>
+      </a>
+
+      <div class="headerMeta" aria-label="Archive status">
+        <span class="liveDot" aria-hidden="true"></span>
+        <span id="providerCount">3 AI providers indexed</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="pageShell">
+    <section class="hero" aria-labelledby="pageTitle">
+      <div class="heroRobotPatrol" aria-label="Configured AI providers on patrol">
+        <div id="patrolTrack" class="patrolTrack" aria-hidden="true"></div>
+      </div>
+
+      <h1 id="pageTitle" class="heroTitle">
+        <span class="miniWord">Mini</span>
+        <span class="robotAIWord" aria-label="AI">
+          <span class="robotAILetters">AI</span>
+        </span>
+        <span>Encyclopedia,</span>
+        <span class="titleSecondLine">
+          in
+          <span class="twirlOne" aria-label="one">
+            <span class="twirlOneInner">
+              <span class="twirlFace twirlNumber">1</span>
+              <span class="twirlFace twirlWord">one</span>
+            </span>
+          </span>
+          place.
+        </span>
+      </h1>
+
+      <p class="heroCopy">
+        Follow product releases, model upgrades, API changes and deprecations without chasing three different corners of the internet.
+      </p>
+
+      <nav id="providerNav" class="providerOrbitNav" aria-label="Select an AI provider"></nav>
+    </section>
+
+    <section id="archiveSection" class="archiveSection" aria-labelledby="archiveTitle" hidden>
+      <div id="archiveHeader" class="archiveToolbar">
+        <div class="archiveHeading">
+          <p class="sectionKicker">CHANGELOG</p>
+          <div class="archiveTitleLine">
+            <h2 id="archiveTitle">AI updates</h2>
+            <span id="visibleUpdateCount" class="updateCount">0 updates</span>
+          </div>
+          <p id="archiveDescription" class="archiveDescription"></p>
+        </div>
+
+        <label class="selectControl">
+          <span>Sort</span>
+          <select id="sortOrder" aria-label="Sort changelog entries">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+        </label>
+      </div>
+
+      <div id="tagFilters" class="tagFilters" aria-label="Filter by change type"></div>
+      <div id="changelogFeed" class="changelogFeed" aria-live="polite"></div>
+    </section>
+  </main>
+
+  <div id="providerRobotDock" class="providerRobotDock" aria-label="Quick AI provider selector" hidden></div>
+
+  <footer class="siteFooter">
+    <p>Mini AI Encyclopedia <span aria-hidden="true">·</span> One timeline at a time.</p>
+  </footer>
+
+  <script src="ai-encyclopedia.config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

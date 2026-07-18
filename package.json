@@ -1,0 +1,17 @@
+{
+  "name": "mini-ai-encyclopedia",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Static AI changelog archive with scheduled source adapters.",
+  "scripts": {
+    "update:gemini": "node scripts/update-gemini.js",
+    "test:gemini": "node --test tests/fetch-gemini.test.js"
+  },
+  "engines": {
+    "node": ">=20.18.1"
+  },
+  "dependencies": {
+    "cheerio": "1.2.0"
+  }
+}
