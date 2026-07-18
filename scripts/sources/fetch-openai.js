@@ -3,6 +3,16 @@ import * as cheerio from "cheerio";
 export const OPENAI_CHANGELOG_URL =
   "https://help.openai.com/en/articles/6825453-chatgpt-release-notes";
 
+/*
+ * The Help Center sometimes rejects obvious server-side scraper requests.
+ * Its .json-suffixed route still serves the official article HTML, but through
+ * a route that is friendlier to automated document retrieval.
+ */
+const OPENAI_FETCH_URLS = [
+  `${OPENAI_CHANGELOG_URL}.json`,
+  OPENAI_CHANGELOG_URL
+];
+
 const DATE_PATTERN =
   /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}(?:st|nd|rd|th)?,\s+\d{4}$/i;
 
@@ -28,21 +38,37 @@ export async function fetchOpenAIChangelog(options = {}) {
     throw new Error("A fetch implementation is required.");
   }
 
-  const response = await fetchImpl(OPENAI_CHANGELOG_URL, {
-    headers: {
-      Accept: "text/html,application/xhtml+xml",
-      "Accept-Language": "en-US,en;q=0.9",
-      "User-Agent": "Mini-AI-Encyclopedia/1.1 (+https://vercel.com)"
-    }
-  });
+  const requestHeaders = {
+    Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+    Pragma: "no-cache",
+    Referer: "https://help.openai.com/",
+    "Upgrade-Insecure-Requests": "1",
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+      "AppleWebKit/537.36 (KHTML, like Gecko) " +
+      "Chrome/131.0.0.0 Safari/537.36"
+  };
 
-  if (!response.ok) {
-    throw new Error(
-      `OpenAI changelog request failed with HTTP ${response.status}.`
-    );
+  const failures = [];
+
+  for (const url of OPENAI_FETCH_URLS) {
+    const response = await fetchImpl(url, {
+      headers: requestHeaders,
+      redirect: "follow"
+    });
+
+    if (response.ok) {
+      return parseOpenAIChangelog(await response.text());
+    }
+
+    failures.push(`${url} returned HTTP ${response.status}`);
   }
 
-  return parseOpenAIChangelog(await response.text());
+  throw new Error(
+    `OpenAI Help Center blocked the server-side request. ${failures.join("; ")}`
+  );
 }
 
 export function parseOpenAIChangelog(html) {
