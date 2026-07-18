@@ -438,10 +438,36 @@ a:focus-visible {
 .selectControl select {
   min-width: 150px;
   padding: 11px 35px 11px 12px;
-  border: 1px solid var(--line);
+
+  border: 1px solid rgba(143, 162, 255, 0.42);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.035);
-  color: var(--text);
+
+  /* 50% transparent dark background */
+  background: rgba(7, 9, 16, 0.5);
+
+  /* White selected text */
+  color: #ffffff;
+
+  /* Light, subtle neon glow */
+  box-shadow:
+    0 0 0 1px rgba(143, 162, 255, 0.08),
+    0 0 12px rgba(143, 162, 255, 0.18),
+    inset 0 0 10px rgba(143, 162, 255, 0.04);
+
+  backdrop-filter: blur(10px);
+}
+
+.selectControl select option {
+  background: #0b0e17;
+  color: #ffffff;
+}
+
+.selectControl select:focus {
+  border-color: rgba(143, 162, 255, 0.75);
+  box-shadow:
+    0 0 0 1px rgba(143, 162, 255, 0.16),
+    0 0 18px rgba(143, 162, 255, 0.3),
+    inset 0 0 12px rgba(143, 162, 255, 0.06);
 }
 
 .tagFilters {
