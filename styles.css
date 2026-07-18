@@ -558,6 +558,7 @@ a:focus-visible {
   max-width: 840px;
   margin: 10px 0 16px;
   color: var(--muted);
+  white-space: pre-line;
   font-size: 13px;
   line-height: 1.7;
 }

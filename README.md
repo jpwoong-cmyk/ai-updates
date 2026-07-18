@@ -1,82 +1,70 @@
-# Mini AI Encyclopedia
+# Mini AI Encyclopedia: Gemini Live Data
 
-A modular HTML, CSS and JavaScript interface for displaying one AI provider's changelog at a time.
+This version connects the Gemini provider to Google's official Gemini API release-notes page while leaving the OpenAI and Anthropic providers on the existing preview data.
 
-## Files
+## Current Gemini mapping
 
-- `index.html`: page structure
-- `styles.css`: responsive visual design and animations
-- `ai-encyclopedia.config.js`: providers, preview entries and future API endpoints
-- `app.js`: provider selection, API loading, filtering, scroll reveals and robot-dock behaviour
+Source: `https://ai.google.dev/gemini-api/docs/changelog`
 
-## Provider navigation
+Each release date becomes one changelog card:
 
-No provider is selected on first load, so the changelog remains hidden until an AI orb is chosen.
+- `span.devsite-heading` date text becomes the entry `date` used by `.changeDate`.
+- The first `<ul>` following that dated heading becomes the full `changeSummary`.
+- Nested list items are retained as indented bullet lines.
+- The first five words from that list become `changeTitle`.
+- Gemini entries currently receive the `API` tag.
+- The official dated section is retained in `sourceUrl` when the heading has an ID.
 
-When the main provider navigation approaches the top of the viewport:
+## Added files
 
-1. The provider labels dissolve.
-2. The circular provider orbs dismantle and fall below the viewport.
-3. Small robots assemble at the bottom of the screen.
-4. The robots walk to a fixed dock on the right.
-5. Their provider labels appear above them.
+```text
+scripts/sources/fetch-gemini.js
+scripts/update-gemini.js
+data/gemini.json
+.github/workflows/update-gemini.yml
+tests/fetch-gemini.test.js
+tests/fixtures/gemini-changelog.html
+package.json
+```
 
-The fixed robots remain clickable and can switch the active changelog. Scrolling back to the hero reverses the sequence: dock labels drop into animated holes, the dock robots dissolve, and the original provider orbs reassemble.
+## How it works
 
-The dock is generated from the `providers` array. Adding another provider automatically adds another hero orb, patrol robot and dock robot.
+1. GitHub Actions runs at 23:59 in the `Asia/Singapore` timezone.
+2. `scripts/update-gemini.js` downloads the official page.
+3. Cheerio reads each dated heading and its following release-note list.
+4. The updater validates the result before replacing `data/gemini.json`.
+5. If the page structure breaks or fewer than 20 entries are found, the workflow fails and the previous valid JSON remains untouched.
+6. If nothing changed, no commit is created.
+7. If data changed, GitHub Actions commits `data/gemini.json`; Vercel then redeploys from the repository.
 
-## Existing API IDs
+## Frontend configuration
 
-- ChatGPT / OpenAI: `openAI_API`
-- Claude / Anthropic: `anthropic_API`
-- Gemini / Google: `gemini_API`
-
-Paste the future endpoint into the matching provider's `api.endpoint` field:
+Gemini now uses:
 
 ```js
 api: {
-  id: "openAI_API",
-  endpoint: "https://your-api.example.com/openai-changelog"
+  id: "gemini_API",
+  endpoint: "./data/gemini.json"
 }
 ```
 
-## Add another AI
+`previewMode` remains enabled so OpenAI and Anthropic continue using their preview entries while Gemini uses the real JSON endpoint.
 
-Duplicate one provider object inside `ai-encyclopedia.config.js`:
+## First GitHub run
 
-```js
-{
-  id: "mistral",
-  name: "Mistral AI",
-  product: "Le Chat",
-  shortLabel: "Mistral",
-  initials: "MI",
-  accent: "#f2a340",
-  description: "Mistral product, model and API updates.",
-  api: {
-    id: "mistral_API",
-    endpoint: ""
-  },
-  previewEntries: []
-}
+After uploading the files to the repository:
+
+1. Open the repository's **Actions** tab.
+2. Select **Update Gemini changelog**.
+3. Choose **Run workflow**.
+4. The workflow fetches the current release notes and commits `data/gemini.json` when successful.
+
+## Local commands
+
+```bash
+npm install
+npm run test:gemini
+npm run update:gemini
 ```
 
-## Preview data
-
-`previewMode: true` currently supplies 10 sample changelog rows per provider so the scroll-triggered animations and fixed robot dock can be tested properly.
-
-## Safe failure behaviour
-
-Before any API request begins, each provider starts with an empty data array. Missing endpoints, failed requests, invalid JSON and unsupported response shapes display `No data found` without breaking the page.
-
-Once a real endpoint is configured, an API failure does not fall back to preview content.
-
-## Expandable changelog rows
-
-Each changelog row begins in a title-only state: `changeSummary` and tags stay hidden until the entry is opened. Clicking anywhere on the non-interactive area of a row, or pressing its `{}` control, expands the full details. The control changes to `{...}` while open, and opening another row closes the previously expanded row.
-
-An expanded row receives a provider-coloured animated neon perimeter so its full boundary is visually separated from the entries above and below it. The perimeter now completes one orbit every 7 seconds for a calmer effect. When an official `sourceUrl` is available, the external-source arrow remains as a separate action beneath the expand control.
-
-## Dock-head repair
-
-The fixed bottom-right provider dock uses the head-only classes generated by `app.js` (`dockOrbHead`, `dockHeadFace`, `dockHeadEye`, `dockHeadSmile`). Each head looks left and right, retains its provider accent, and scrolls the page to `#archiveHeader` when selected.
+The live fetch command requires internet access. The included fixture test does not.
