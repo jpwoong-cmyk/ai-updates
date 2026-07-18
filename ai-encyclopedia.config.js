@@ -35,7 +35,7 @@ window.AI_ENCYCLOPEDIA_CONFIG = {
       "description": "ChatGPT, OpenAI models and platform updates.",
       "api": {
         "id": "openAI_API",
-        "endpoint": ""
+        "endpoint": "api/openai"
       },
       "previewEntries": [
         {
