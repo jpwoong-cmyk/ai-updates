@@ -517,17 +517,34 @@
 
     try {
       const response = await fetch(endpoint, {
-        method: "GET",
-        headers: {
-          Accept: "application/json"
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error("API request failed");
+      method: "GET",
+      headers: {
+        Accept: "application/json"
       }
+    });
 
-      const payload = await response.json();
+    const responseText = await response.text();
+
+    let payload = null;
+
+    try {
+      payload = responseText ? JSON.parse(responseText) : null;
+    } catch (parseError) {
+      payload = null;
+    }
+
+    if (!response.ok) {
+      const serverError =
+        payload && typeof payload.error === "string"
+          ? payload.error
+          : `API request failed with HTTP ${response.status}`;
+
+      throw new Error(serverError);
+    }
+
+    if (!payload) {
+      throw new Error("The changelog API returned invalid JSON.");
+    }
       const items = extractArray(payload)
         .map(function (item, index) {
           return normaliseEntry(item, provider, index);
