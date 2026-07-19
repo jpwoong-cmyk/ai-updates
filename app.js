@@ -1489,20 +1489,38 @@
   function setChangeRowExpanded(article, expanded) {
     const body = article.querySelector(".dateGroupBody");
 
-    if (body && expanded) {
-      article.style.setProperty(
-        "--summary-expanded-height",
-        `${Math.max(320, body.scrollHeight + 120)}px`
-      );
-    }
+    /*
+    * Expanded styles must be applied before measuring.
+    * The temporary large value allows all summaries to reveal so that
+    * body.scrollHeight returns the actual complete content height.
+    */
+    if (expanded) {
+      article.style.setProperty("--summary-expanded-height", "100000px");
+      article.classList.add("isExpanded");
 
-    article.classList.toggle("isExpanded", expanded);
+      if (body) {
+        body.setAttribute("aria-hidden", "false");
 
-    if (body) {
-      body.setAttribute("aria-hidden", String(!expanded));
+        window.requestAnimationFrame(function () {
+          const completeHeight = Math.max(320, body.scrollHeight + 64);
+
+          article.style.setProperty(
+            "--summary-expanded-height",
+            `${completeHeight}px`
+          );
+        });
+      }
+    } else {
+      article.classList.remove("isExpanded");
+      article.style.removeProperty("--summary-expanded-height");
+
+      if (body) {
+        body.setAttribute("aria-hidden", "true");
+      }
     }
 
     const toggle = article.querySelector(".changeExpandToggle");
+
     if (!toggle) {
       return;
     }
@@ -1513,6 +1531,7 @@
 
     const date = article.querySelector(".dateGroupDate");
     const dateText = date ? date.textContent : "this date";
+
     toggle.setAttribute(
       "aria-label",
       `${expanded ? "Collapse" : "Expand"} updates for ${dateText}`
