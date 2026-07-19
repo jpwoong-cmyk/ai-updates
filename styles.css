@@ -2506,3 +2506,173 @@ a:focus-visible {
     font-size: 19px;
   }
 }
+
+
+/* ============================================================
+   COMPACT DATE PREVIEW + EXPANDED PRODUCT/DEVELOPER DETAILS
+   ============================================================ */
+
+.dateGroupHeader {
+  align-items: start;
+}
+
+.dateGroupHeaderMain {
+  min-width: 0;
+}
+
+.dateGroupAudienceStrip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.dateGroupAudienceBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-2);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.dateGroupAudienceBadge strong {
+  color: #d8dee8;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.dateGroupAudienceBadge .audienceIcon {
+  flex: 0 0 auto;
+}
+
+.dateGroupAudienceCount {
+  min-width: 18px;
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  color: var(--muted-2);
+  font-size: 8px;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.productAudienceBadge .audienceIcon {
+  color: #62dfaa;
+  text-shadow: 0 0 10px rgba(98, 223, 170, 0.78);
+}
+
+.developerAudienceBadge .audienceIcon {
+  border-color: color-mix(in srgb, var(--provider-accent) 34%, rgba(255, 255, 255, 0.1));
+  color: color-mix(in srgb, var(--provider-accent) 76%, white);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  text-shadow: 0 0 9px color-mix(in srgb, var(--provider-accent) 45%, transparent);
+}
+
+.dateGroupPreview {
+  margin-top: 20px;
+}
+
+.dateGroupPreviewTitle {
+  display: -webkit-box;
+  max-width: 980px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-size: clamp(22px, 2.7vw, 32px);
+  line-height: 1.16;
+}
+
+.dateGroupPreviewNote {
+  margin: 9px 0 0;
+  color: var(--muted-2);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.dateGroupPreviewTags {
+  margin-top: 14px;
+}
+
+.dateGroupBody {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition:
+    max-height 620ms cubic-bezier(0.16, 1, 0.3, 1),
+    padding 420ms ease,
+    opacity 240ms ease,
+    transform 420ms cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0s linear 620ms;
+}
+
+.changeDateGroup.isExpanded .dateGroupBody {
+  max-height: var(--summary-expanded-height);
+  padding-top: 6px;
+  padding-bottom: 28px;
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  transition-delay: 0s;
+}
+
+.changeDateGroup.isExpanded .dateGroupPreview {
+  display: none;
+}
+
+.changeDateGroup.isExpanded .dateGroupAudienceStrip {
+  display: none;
+}
+
+.changeDateGroup.isExpanded .groupedUpdateTitle {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+@media (max-width: 760px) {
+  .dateGroupAudienceStrip {
+    margin-top: 15px;
+  }
+
+  .dateGroupPreview {
+    margin-top: 16px;
+  }
+
+  .dateGroupPreviewTitle {
+    font-size: clamp(20px, 6vw, 26px);
+  }
+
+  .changeDateGroup.isExpanded .dateGroupBody {
+    padding-bottom: 24px;
+  }
+}
+
+@media (max-width: 520px) {
+  .dateGroupAudienceBadge {
+    gap: 6px;
+  }
+
+  .dateGroupAudienceCount {
+    display: none;
+  }
+
+  .dateGroupPreviewTitle {
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  .dateGroupPreviewNote {
+    font-size: 10px;
+  }
+}

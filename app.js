@@ -1151,9 +1151,13 @@
 
     const safeDate = (group.date || "unknown").replace(/[^a-zA-Z0-9_-]/g, "-");
     const bodyId = `date-group-body-${safeDate}`;
+    const preview = getDateGroupPreview(group);
 
     const header = document.createElement("header");
     header.className = "dateGroupHeader";
+
+    const headerMain = document.createElement("div");
+    headerMain.className = "dateGroupHeaderMain";
 
     const meta = document.createElement("div");
     meta.className = "changeMeta dateGroupMeta";
@@ -1172,6 +1176,40 @@
     count.textContent = `${group.totalEntries} update${group.totalEntries === 1 ? "" : "s"}`;
 
     meta.append(marker, date, count);
+
+    const audienceStrip = createAudienceStrip(group);
+
+    const previewContent = document.createElement("div");
+    previewContent.className = "dateGroupPreview";
+
+    const previewTitle = document.createElement("h3");
+    previewTitle.className = "changeTitle dateGroupPreviewTitle";
+    previewTitle.textContent = preview.title;
+
+    const previewTags = document.createElement("div");
+    previewTags.className = "changeTags dateGroupPreviewTags";
+
+    preview.tags.forEach(function (tagText) {
+      const tag = document.createElement("span");
+      tag.className = "changeTag";
+      tag.textContent = tagText;
+      previewTags.appendChild(tag);
+    });
+
+    previewContent.appendChild(previewTitle);
+
+    if (preview.note) {
+      const note = document.createElement("p");
+      note.className = "dateGroupPreviewNote";
+      note.textContent = preview.note;
+      previewContent.appendChild(note);
+    }
+
+    if (preview.tags.length) {
+      previewContent.appendChild(previewTags);
+    }
+
+    headerMain.append(meta, audienceStrip, previewContent);
 
     const actions = document.createElement("div");
     actions.className = "changeActions dateGroupActions";
@@ -1192,11 +1230,12 @@
     });
 
     actions.appendChild(toggle);
-    header.append(meta, actions);
+    header.append(headerMain, actions);
 
     const body = document.createElement("div");
     body.id = bodyId;
     body.className = "dateGroupBody";
+    body.setAttribute("aria-hidden", "true");
 
     const sections = [];
 
@@ -1231,6 +1270,122 @@
     });
 
     return article;
+  }
+
+  function createAudienceStrip(group) {
+    const strip = document.createElement("div");
+    strip.className = "dateGroupAudienceStrip";
+    strip.setAttribute("aria-label", "Update audiences");
+
+    if (group.product.length) {
+      strip.appendChild(createAudienceBadge("product", group.product.length));
+    }
+
+    if (group.developer.length) {
+      strip.appendChild(createAudienceBadge("developer", group.developer.length));
+    }
+
+    return strip;
+  }
+
+  function createAudienceBadge(audience, count) {
+    const badge = document.createElement("span");
+    badge.className = `dateGroupAudienceBadge ${audience}AudienceBadge`;
+
+    const icon = document.createElement("span");
+    icon.className = "audienceIcon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = audience === "developer" ? "</>" : "●";
+
+    const label = document.createElement("strong");
+    label.textContent = audience === "developer" ? "Developer" : "Product";
+
+    const total = document.createElement("span");
+    total.className = "dateGroupAudienceCount";
+    total.textContent = String(count);
+
+    badge.append(icon, label, total);
+    return badge;
+  }
+
+  function getDateGroupPreview(group) {
+    const hasProduct = group.product.length > 0;
+    const entries = hasProduct ? group.product : group.developer;
+    const primary = entries[0];
+
+    if (!primary) {
+      return {
+        title: "Update details",
+        note: "",
+        tags: []
+      };
+    }
+
+    const hiddenCount = group.totalEntries - 1;
+    const tags = Array.from(
+      new Set(
+        entries.flatMap(function (entry) {
+          return Array.isArray(entry.tags) ? entry.tags : [];
+        })
+      )
+    ).slice(0, 3);
+
+    if (hasProduct) {
+      return {
+        title: primary.title,
+        note: hiddenCount > 0
+          ? `${hiddenCount} more update${hiddenCount === 1 ? "" : "s"} available when expanded.`
+          : "",
+        tags
+      };
+    }
+
+    return {
+      title: createDeveloperGroupTitle(group.developer),
+      note: group.developer.length > 1
+        ? `${group.developer.length} developer releases grouped for this date.`
+        : "",
+      tags
+    };
+  }
+
+  function createDeveloperGroupTitle(entries) {
+    if (!entries.length) {
+      return "Developer updates";
+    }
+
+    if (entries.length === 1) {
+      return entries[0].title;
+    }
+
+    const titles = entries.map(function (entry) {
+      return String(entry.title || "").trim();
+    });
+    const combined = titles.join(" ").toLowerCase();
+
+    if (titles.every(function (title) {
+      return /^deprecation announcement\b/i.test(title);
+    })) {
+      return "Deprecation announcements";
+    }
+
+    if (titles.every(function (title) {
+      return /^deprecated\b/i.test(title);
+    }) || combined.includes("deprecat")) {
+      return "Developer deprecations";
+    }
+
+    if (titles.every(function (title) {
+      return /^new\b|^introduc|^launch|^releas|^added\b/i.test(title);
+    })) {
+      return "New developer releases";
+    }
+
+    if (combined.includes("security") || combined.includes("safety")) {
+      return "Developer security and safety updates";
+    }
+
+    return `${entries.length} developer updates`;
   }
 
   function createAudienceSection(audience, entries) {
@@ -1342,6 +1497,10 @@
     }
 
     article.classList.toggle("isExpanded", expanded);
+
+    if (body) {
+      body.setAttribute("aria-hidden", String(!expanded));
+    }
 
     const toggle = article.querySelector(".changeExpandToggle");
     if (!toggle) {
