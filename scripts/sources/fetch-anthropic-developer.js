@@ -147,19 +147,47 @@ function findArticleRoot($) {
 }
 
 function findDateHeadings($, root) {
-  const semanticHeadings = root.find("h2, h3, h4").filter(function () {
+  const semanticHeadings = root.find(
+    "h1, h2, h3, h4, h5, h6, [role='heading']"
+  ).filter(function () {
     const element = $(this);
-    return DATE_PATTERN.test(
-      cleanText(element.attr("data-text") || element.text())
+    const text = cleanText(
+      element.attr("data-text") ||
+      element.attr("aria-label") ||
+      element.text()
     );
+
+    return DATE_PATTERN.test(text);
   });
 
   if (semanticHeadings.length) {
     return semanticHeadings;
   }
 
-  return root.find("[role='heading']").filter(function () {
-    return DATE_PATTERN.test(cleanText($(this).text()));
+  /*
+   * Anthropic's documentation site may render release dates inside
+   * non-semantic elements. Search leaf-like elements as a fallback,
+   * while avoiding large wrapper elements containing an entire section.
+   */
+  return root.find("div, span, p, time").filter(function () {
+    const element = $(this);
+
+    const text = cleanText(
+      element.attr("datetime") ||
+      element.attr("data-text") ||
+      element.attr("aria-label") ||
+      element.text()
+    );
+
+    if (!DATE_PATTERN.test(text)) {
+      return false;
+    }
+
+    const childText = element.children().toArray().some(function (child) {
+      return DATE_PATTERN.test(cleanText($(child).text()));
+    });
+
+    return !childText;
   });
 }
 
