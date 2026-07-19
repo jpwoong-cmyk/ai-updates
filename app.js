@@ -1490,33 +1490,13 @@
     const body = article.querySelector(".dateGroupBody");
 
     /*
-    * Expanded styles must be applied before measuring.
-    * The temporary large value allows all summaries to reveal so that
-    * body.scrollHeight returns the actual complete content height.
-    */
-    if (expanded) {
-      article.style.setProperty("--summary-expanded-height", "100000px");
-      article.classList.add("isExpanded");
+     * The detail panel uses natural document height.
+     * No pixel measurement, max-height guess, or nested scrollbar is needed.
+     */
+    article.classList.toggle("isExpanded", expanded);
 
-      if (body) {
-        body.setAttribute("aria-hidden", "false");
-
-        window.requestAnimationFrame(function () {
-          const completeHeight = Math.max(320, body.scrollHeight + 64);
-
-          article.style.setProperty(
-            "--summary-expanded-height",
-            `${completeHeight}px`
-          );
-        });
-      }
-    } else {
-      article.classList.remove("isExpanded");
-      article.style.removeProperty("--summary-expanded-height");
-
-      if (body) {
-        body.setAttribute("aria-hidden", "true");
-      }
+    if (body) {
+      body.setAttribute("aria-hidden", String(!expanded));
     }
 
     const toggle = article.querySelector(".changeExpandToggle");

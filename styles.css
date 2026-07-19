@@ -2598,30 +2598,54 @@ a:focus-visible {
   margin-top: 14px;
 }
 
-.dateGroupBody {
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  overflow: hidden;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(-8px);
-  transition:
-    max-height 620ms cubic-bezier(0.16, 1, 0.3, 1),
-    padding 420ms ease,
-    opacity 240ms ease,
-    transform 420ms cubic-bezier(0.16, 1, 0.3, 1),
-    visibility 0s linear 620ms;
+/*
+ * Date details use their natural content height.
+ * Collapsed cards remove the body from layout; expanded cards allow the
+ * browser to size the panel to every title, summary, tag and source link.
+ */
+.changeDateGroup .dateGroupBody {
+  display: none;
+  max-height: none;
+  padding: 6px 18px 28px;
+  overflow: visible;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: none;
 }
 
 .changeDateGroup.isExpanded .dateGroupBody {
-  max-height: var(--summary-expanded-height);
-  padding-top: 6px;
-  padding-bottom: 28px;
+  display: block;
+  max-height: none;
+  padding: 6px 18px 28px;
+  overflow: visible;
   opacity: 1;
   visibility: visible;
-  transform: translateY(0);
-  transition-delay: 0s;
+  transform: none;
+  animation: dateGroupDetailsReveal 260ms ease both;
+}
+
+/* Summaries must also size naturally inside the flexible panel. */
+.changeDateGroup.isExpanded .changeSummary {
+  max-height: none;
+  margin: 10px 0 16px;
+  overflow: visible;
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: none;
+}
+
+@keyframes dateGroupDetailsReveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .changeDateGroup.isExpanded .dateGroupPreview {
@@ -2653,7 +2677,7 @@ a:focus-visible {
   }
 
   .changeDateGroup.isExpanded .dateGroupBody {
-    padding-bottom: 24px;
+    padding: 6px 14px 24px;
   }
 }
 
