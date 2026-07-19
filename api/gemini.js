@@ -6,6 +6,7 @@ import {
 export default async function handler(request, response) {
   if (request.method !== "GET") {
     response.setHeader("Allow", "GET");
+
     return response.status(405).json({
       error: "Method not allowed"
     });
@@ -27,15 +28,19 @@ export default async function handler(request, response) {
       items
     });
   } catch (error) {
-    console.error("Gemini changelog adapter failed:", error);
+    console.error("Gemini product release-notes adapter failed:", error);
 
     response.setHeader("Cache-Control", "no-store");
+
     return response.status(502).json({
       providerId: "gemini",
       sourceUrl: GEMINI_CHANGELOG_URL,
       itemCount: 0,
       items: [],
-      error: error instanceof Error ? error.message : "Gemini changelog could not be loaded."
+      error:
+        error instanceof Error
+          ? error.message
+          : "Gemini product release notes could not be loaded."
     });
   }
 }
