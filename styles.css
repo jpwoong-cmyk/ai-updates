@@ -1778,20 +1778,38 @@ a:focus-visible {
     right: 8px;
     bottom: 8px;
     left: 8px;
-    max-width: none;
-    justify-content: flex-end;
+
+    width: auto;
+    min-width: 0;
+    max-width: calc(100dvw - 16px);
+
+    justify-content: flex-start;
     gap: 8px;
-    padding-inline: 8px;
+    padding: 10px 8px 8px;
+
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+  }
+
+  .providerRobotDock.isEntering,
+  .providerRobotDock.isReturning {
+    overflow-x: hidden;
+  }
+
+  .providerRobotDock.isReady {
+    overflow-x: auto;
   }
 
   .dockProviderButton {
-    width: 68px;
-    min-width: 68px;
+    width: 64px;
+    min-width: 64px;
+    flex: 0 0 64px;
   }
 
   .dockProviderLabel strong,
   .dockProviderLabel small {
-    max-width: 68px;
+    max-width: 64px;
   }
 }
 
