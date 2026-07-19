@@ -396,6 +396,26 @@ window.AI_ENCYCLOPEDIA_CONFIG = {
           "sourceUrl": ""
         }
       ]
+    },
+    {
+      "id": "copilot",
+      "name": "Microsoft",
+      "product": "Microsoft 365 Copilot",
+      "shortLabel": "Copilot",
+      "initials": "MS",
+      "colourMode": "palette",
+      "accent": "#00A4EF",
+      "palette": [
+        "#F25022",
+        "#7FBA00",
+        "#00A4EF",
+        "#FFB900"
+      ],
+      "description": "Microsoft 365 Copilot app, Chat, agent and Microsoft 365 integration updates.",
+      "api": {
+        "id": "copilot_API",
+        "endpoint": "/api/copilot"
+      }
     }
   ]
 };

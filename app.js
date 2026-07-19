@@ -108,6 +108,38 @@
     window.addEventListener("resize", requestProviderNavPositionCheck);
   }
 
+  function applyProviderTheme(element, provider) {
+    const accent = provider && typeof provider.accent === "string" && provider.accent.trim()
+      ? provider.accent.trim()
+      : "#8fa2ff";
+
+    const palette = provider && Array.isArray(provider.palette)
+      ? provider.palette
+          .filter(function (colour) {
+            return typeof colour === "string" && colour.trim();
+          })
+          .map(function (colour) {
+            return colour.trim();
+          })
+          .slice(0, 4)
+      : [];
+
+    const usePalette = provider && provider.colourMode === "palette" && palette.length >= 2;
+    const paletteColours = [
+      palette[0] || accent,
+      palette[1] || palette[0] || accent,
+      palette[2] || palette[0] || accent,
+      palette[3] || palette[1] || palette[0] || accent
+    ];
+
+    element.style.setProperty("--provider-accent", accent);
+    element.dataset.providerColourMode = usePalette ? "palette" : "single";
+
+    paletteColours.forEach(function (colour, index) {
+      element.style.setProperty(`--provider-palette-${index + 1}`, colour);
+    });
+  }
+
   function renderProviderPatrol() {
     if (!elements.patrolTrack) {
       return;
@@ -130,7 +162,7 @@
   function createPatrolRobot(provider, index) {
     const robot = document.createElement("span");
     robot.className = "patrolRobot";
-    robot.style.setProperty("--provider-accent", provider.accent || "#8fa2ff");
+    applyProviderTheme(robot, provider);
     robot.style.setProperty("--step-delay", `${index * -0.14}s`);
     robot.title = provider.product || provider.name;
 
@@ -180,7 +212,7 @@
     button.type = "button";
     button.className = "providerOrbButton";
     button.dataset.providerId = provider.id;
-    button.style.setProperty("--provider-accent", provider.accent || "#8fa2ff");
+    applyProviderTheme(button, provider);
     button.style.setProperty("--float-delay", `${index * -0.85}s`);
     button.style.setProperty("--provider-index", index);
     button.setAttribute("aria-current", String(state.activeProviderId === provider.id));
@@ -248,7 +280,7 @@
     button.type = "button";
     button.className = "dockProviderButton";
     button.dataset.providerId = provider.id;
-    button.style.setProperty("--provider-accent", provider.accent || "#8fa2ff");
+    applyProviderTheme(button, provider);
     button.style.setProperty("--provider-index", index);
     button.setAttribute("aria-current", String(state.activeProviderId === provider.id));
     button.setAttribute("aria-label", `Show ${provider.product || provider.name} updates`);
@@ -603,6 +635,8 @@
       providerName: provider.name,
       product: provider.product,
       accent: provider.accent,
+      colourMode: provider.colourMode || "single",
+      palette: Array.isArray(provider.palette) ? provider.palette.slice(0, 4) : [],
       title: title,
       date: firstText(item.date, item.publishedAt, item.releaseDate, item.updatedAt, item.createdAt),
       summary: firstText(item.summary, item.description, item.body, item.details, item.content) || "No summary provided.",
@@ -849,7 +883,7 @@
   function createChangeRow(entry) {
     const article = document.createElement("article");
     article.className = "changeRow";
-    article.style.setProperty("--provider-accent", entry.accent || "#8fa2ff");
+    applyProviderTheme(article, entry);
 
     const safeEntryId = `${entry.providerId}-${entry.id}`.replace(/[^a-zA-Z0-9_-]/g, "-");
     const summaryId = `change-summary-${safeEntryId}`;

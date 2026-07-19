@@ -2085,3 +2085,121 @@ a:focus-visible {
     grid-row: 1;
   }
 }
+
+
+/* ============================================================
+   CONFIG-DRIVEN PROVIDER PALETTES
+   ============================================================ */
+
+[data-provider-colour-mode="palette"] {
+  --provider-palette-1: var(--provider-accent);
+  --provider-palette-2: var(--provider-accent);
+  --provider-palette-3: var(--provider-accent);
+  --provider-palette-4: var(--provider-accent);
+}
+
+.providerOrbButton[data-provider-colour-mode="palette"] .providerOrb {
+  border-color: transparent;
+  background:
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--provider-accent) 66%, #111620) 0 46%,
+      #0a0d14 46% 100%
+    ) padding-box,
+    conic-gradient(
+      from -45deg,
+      var(--provider-palette-1) 0 25%,
+      var(--provider-palette-2) 25% 50%,
+      var(--provider-palette-3) 50% 75%,
+      var(--provider-palette-4) 75% 100%
+    ) border-box;
+}
+
+.providerOrbButton[data-provider-colour-mode="palette"] .robotBadge {
+  background: conic-gradient(
+    from -45deg,
+    var(--provider-palette-1) 0 25%,
+    var(--provider-palette-2) 25% 50%,
+    var(--provider-palette-3) 50% 75%,
+    var(--provider-palette-4) 75% 100%
+  );
+}
+
+.providerOrbButton[data-provider-colour-mode="palette"] .robotAntenna::before,
+.patrolRobot[data-provider-colour-mode="palette"] .patrolAntenna::before,
+.dockProviderButton[data-provider-colour-mode="palette"] .dockHeadAntenna::before {
+  background: var(--provider-palette-4);
+  box-shadow: 0 0 8px var(--provider-palette-4);
+}
+
+.providerOrbButton[data-provider-colour-mode="palette"] .robotEye:first-child,
+.patrolRobot[data-provider-colour-mode="palette"] .patrolEye:first-child,
+.dockProviderButton[data-provider-colour-mode="palette"] .dockHeadEye:first-child {
+  background: var(--provider-palette-2);
+  box-shadow: 0 0 7px var(--provider-palette-2);
+}
+
+.providerOrbButton[data-provider-colour-mode="palette"] .robotEye:nth-child(2),
+.patrolRobot[data-provider-colour-mode="palette"] .patrolEye:nth-child(2),
+.dockProviderButton[data-provider-colour-mode="palette"] .dockHeadEye:nth-child(2) {
+  background: var(--provider-palette-3);
+  box-shadow: 0 0 7px var(--provider-palette-3);
+}
+
+.providerOrbButton[data-provider-colour-mode="palette"] .robotMouth {
+  background: linear-gradient(
+    90deg,
+    var(--provider-palette-1),
+    var(--provider-palette-4)
+  );
+}
+
+.dockProviderButton[data-provider-colour-mode="palette"] .dockHeadSmile {
+  border-bottom-color: var(--provider-palette-4);
+  background: transparent;
+}
+
+.patrolRobot[data-provider-colour-mode="palette"] .patrolBody {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--provider-palette-1) 48%, #111722),
+    color-mix(in srgb, var(--provider-palette-4) 48%, #111722)
+  );
+}
+
+.patrolRobot[data-provider-colour-mode="palette"] .patrolBody::before {
+  background: var(--provider-palette-3);
+}
+
+.patrolRobot[data-provider-colour-mode="palette"] .patrolArm {
+  background: var(--provider-palette-1);
+}
+
+.patrolRobot[data-provider-colour-mode="palette"] .patrolLeg {
+  background: var(--provider-palette-3);
+}
+
+.dockProviderButton[data-provider-colour-mode="palette"] .dockHeadFace {
+  border-color: transparent;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.04), #0b0f18) padding-box,
+    conic-gradient(
+      from -45deg,
+      var(--provider-palette-1),
+      var(--provider-palette-2),
+      var(--provider-palette-3),
+      var(--provider-palette-4),
+      var(--provider-palette-1)
+    ) border-box;
+}
+
+.changeRow[data-provider-colour-mode="palette"] .changeMarker {
+  background: conic-gradient(
+    from -45deg,
+    var(--provider-palette-1),
+    var(--provider-palette-2),
+    var(--provider-palette-3),
+    var(--provider-palette-4),
+    var(--provider-palette-1)
+  );
+}

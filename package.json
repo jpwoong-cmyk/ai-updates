@@ -1,16 +1,17 @@
 {
   "name": "mini-ai-encyclopedia",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
-  "description": "Static AI changelog frontend with a cached Vercel Gemini source adapter.",
-  "scripts": {
-    "test:gemini": "node --test tests/fetch-gemini.test.js"
-  },
+  "description": "AI changelog frontend with cached Vercel adapters for OpenAI, Anthropic, Gemini and Microsoft 365 Copilot.",
   "engines": {
     "node": ">=20.18.1"
   },
   "dependencies": {
     "cheerio": "1.2.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "test:copilot": "node --test tests/fetch-copilot.test.js"
   }
 }
