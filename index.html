@@ -69,13 +69,24 @@
           <p id="archiveDescription" class="archiveDescription"></p>
         </div>
 
-        <label class="selectControl">
-          <span>Sort By</span>
-          <select id="sortOrder" aria-label="Sort changelog entries">
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-          </select>
-        </label>
+        <div class="archiveControls">
+          <label class="selectControl">
+            <span>Filter By</span>
+            <select id="audienceFilter" aria-label="Filter changelog audience">
+              <option value="all">All</option>
+              <option value="product">Product</option>
+              <option value="developer">Developer</option>
+            </select>
+          </label>
+
+          <label class="selectControl">
+            <span>Sort By</span>
+            <select id="sortOrder" aria-label="Sort changelog entries">
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       <div id="tagFilters" class="tagFilters" aria-label="Filter by change type"></div>

@@ -1,18 +1,16 @@
 import {
-  fetchGeminiChangelog,
-  GEMINI_CHANGELOG_URL
-} from "../scripts/sources/fetch-gemini.js";
+  fetchGeminiDeveloperChangelog,
+  GEMINI_DEVELOPER_CHANGELOG_URL
+} from "../scripts/sources/fetch-gemini-developer.js";
 
 export default async function handler(request, response) {
   if (request.method !== "GET") {
     response.setHeader("Allow", "GET");
-    return response.status(405).json({
-      error: "Method not allowed"
-    });
+    return response.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const items = await fetchGeminiChangelog();
+    const items = await fetchGeminiDeveloperChangelog();
 
     response.setHeader(
       "Cache-Control",
@@ -21,21 +19,26 @@ export default async function handler(request, response) {
 
     return response.status(200).json({
       providerId: "gemini",
-      sourceUrl: GEMINI_CHANGELOG_URL,
+      audience: "developer",
+      sourceUrl: GEMINI_DEVELOPER_CHANGELOG_URL,
       generatedAt: new Date().toISOString(),
       itemCount: items.length,
       items
     });
   } catch (error) {
-    console.error("Gemini changelog adapter failed:", error);
-
+    console.error("Gemini developer changelog adapter failed:", error);
     response.setHeader("Cache-Control", "no-store");
+
     return response.status(502).json({
       providerId: "gemini",
-      sourceUrl: GEMINI_CHANGELOG_URL,
+      audience: "developer",
+      sourceUrl: GEMINI_DEVELOPER_CHANGELOG_URL,
       itemCount: 0,
       items: [],
-      error: error instanceof Error ? error.message : "Gemini changelog could not be loaded."
+      error:
+        error instanceof Error
+          ? error.message
+          : "Gemini developer changelog could not be loaded."
     });
   }
 }

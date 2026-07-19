@@ -20,7 +20,12 @@
 }
 
 html {
+  overflow-x: clip;
   scroll-behavior: smooth;
+}
+
+body {
+  overflow-x: clip;
 }
 
 body {
@@ -2202,4 +2207,302 @@ a:focus-visible {
     var(--provider-palette-4),
     var(--provider-palette-1)
   );
+}
+
+/* ============================================================
+   PRODUCT + DEVELOPER DATE-GROUPED ARCHIVE
+   ============================================================ */
+
+.archiveControls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: end;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.archiveControls .selectControl select {
+  min-width: 144px;
+}
+
+.feedWarning {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 16px;
+  padding: 13px 16px;
+  border: 1px solid rgba(255, 185, 72, 0.24);
+  border-radius: 12px;
+  background: rgba(255, 185, 72, 0.055);
+  color: #c9d0dd;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.feedWarning strong {
+  color: #f0d39c;
+  font-size: 11px;
+}
+
+.feedWarning span {
+  color: var(--muted);
+}
+
+.changelogDateList {
+  border-bottom: 1px solid var(--line);
+}
+
+.changeDateGroup {
+  display: block;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.changeDateGroup:hover {
+  padding-inline: 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--provider-accent) 7%, transparent),
+    transparent 70%
+  );
+}
+
+.changeDateGroup.isExpanded {
+  padding-inline: 0;
+}
+
+.dateGroupHeader {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 26px 18px 22px;
+  cursor: pointer;
+}
+
+.dateGroupMeta {
+  display: flex;
+  grid-template-columns: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.dateGroupDate {
+  color: #eef1f7;
+  font-size: 15px;
+  letter-spacing: 0.025em;
+}
+
+.dateGroupCount {
+  color: var(--muted-2);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dateGroupActions {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.dateGroupBody {
+  position: relative;
+  z-index: 1;
+  padding: 0 18px 28px;
+}
+
+.audienceSection {
+  padding: 2px 0;
+}
+
+.audienceSectionHeader {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 2px;
+  color: var(--muted-2);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.audienceSectionHeader strong {
+  color: #d8dee8;
+  font-size: 10px;
+  letter-spacing: 0.11em;
+}
+
+.audienceSectionHeader > span:last-child {
+  margin-left: auto;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+}
+
+.audienceIcon {
+  display: inline-grid;
+  min-width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 8px;
+  letter-spacing: -0.08em;
+}
+
+.productSection .audienceIcon {
+  color: #62dfaa;
+  text-shadow: 0 0 10px rgba(98, 223, 170, 0.78);
+}
+
+.developerSection .audienceIcon {
+  border-color: color-mix(in srgb, var(--provider-accent) 34%, rgba(255, 255, 255, 0.1));
+  color: color-mix(in srgb, var(--provider-accent) 76%, white);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  text-shadow: 0 0 9px color-mix(in srgb, var(--provider-accent) 45%, transparent);
+}
+
+.audienceDivider {
+  height: 1px;
+  margin: 24px 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--provider-accent) 38%, rgba(255, 255, 255, 0.12)),
+    transparent
+  );
+}
+
+.groupedUpdates {
+  display: grid;
+}
+
+.groupedUpdate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  gap: 18px;
+  align-items: start;
+  padding: 18px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.groupedUpdate:first-child {
+  border-top-color: transparent;
+}
+
+.groupedUpdateContent {
+  min-width: 0;
+}
+
+.groupedUpdateTitle {
+  font-size: clamp(18px, 2.2vw, 25px);
+}
+
+.groupedUpdateSummary {
+  white-space: pre-line;
+}
+
+.groupedSourceLink {
+  align-self: start;
+}
+
+.changeDateGroup.isExpanded .dateGroupHeader {
+  padding-bottom: 16px;
+}
+
+.changeDateGroup.isExpanded .dateGroupDate {
+  color: white;
+  text-shadow: 0 0 12px color-mix(in srgb, var(--provider-accent) 34%, transparent);
+}
+
+.changeDateGroup.isExpanded .audienceSectionHeader strong {
+  color: white;
+}
+
+.changeDateGroup.isExpanded .changeSummary {
+  max-height: var(--summary-expanded-height);
+}
+
+.changeDateGroup[data-provider-colour-mode="palette"] .audienceDivider {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--provider-palette-1),
+    var(--provider-palette-2),
+    var(--provider-palette-3),
+    var(--provider-palette-4),
+    transparent
+  );
+  opacity: 0.4;
+}
+
+@media (max-width: 760px) {
+  .archiveControls {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .archiveControls .selectControl {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+
+  .archiveControls .selectControl select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .dateGroupHeader {
+    padding: 22px 14px 18px;
+  }
+
+  .dateGroupBody {
+    padding: 0 14px 24px;
+  }
+
+  .changeDateGroup.isExpanded {
+    padding-inline: 0;
+  }
+
+  .dateGroupActions {
+    grid-column: 2;
+    grid-row: 1;
+  }
+}
+
+@media (max-width: 520px) {
+  .archiveControls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .dateGroupHeader {
+    gap: 12px;
+  }
+
+  .dateGroupMeta {
+    gap: 8px;
+  }
+
+  .dateGroupCount {
+    flex-basis: 100%;
+    padding-left: 18px;
+  }
+
+  .audienceSectionHeader > span:last-child {
+    display: none;
+  }
+
+  .groupedUpdate {
+    gap: 12px;
+  }
+
+  .groupedUpdateTitle {
+    font-size: 19px;
+  }
 }

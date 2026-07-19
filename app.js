@@ -11,9 +11,11 @@
   const state = {
     activeProviderId: getInitialProviderId(),
     activeTag: "All changes",
+    audienceFilter: "all",
     sortOrder: "newest",
     currentPage: 1,
-    pageSize: 25,
+    // Pagination now keeps complete dates together instead of splitting a day.
+    pageSize: 15,
     entriesByProvider: new Map(),
     loadErrorsByProvider: new Map()
   };
@@ -43,6 +45,7 @@
     paginationStatus: document.getElementById("paginationStatus"),
     previousPage: document.getElementById("previousPage"),
     nextPage: document.getElementById("nextPage"),
+    audienceFilter: document.getElementById("audienceFilter"),
     sortOrder: document.getElementById("sortOrder")
   };
 
@@ -79,6 +82,15 @@
   }
 
   function bindEvents() {
+    if (elements.audienceFilter) {
+      elements.audienceFilter.value = state.audienceFilter;
+      elements.audienceFilter.addEventListener("change", function (event) {
+        state.audienceFilter = normaliseAudience(event.target.value, "all");
+        state.currentPage = 1;
+        renderArchive();
+      });
+    }
+
     elements.sortOrder.addEventListener("change", function (event) {
       state.sortOrder = event.target.value;
       state.currentPage = 1;
@@ -493,9 +505,14 @@
   }
 
   function renderTagFilters() {
-    const tags = Array.isArray(config.defaultTags) && config.defaultTags.length
+    const tags = (Array.isArray(config.defaultTags) && config.defaultTags.length
       ? config.defaultTags
-      : ["All changes"];
+      : ["All changes"])
+      .filter(function (tag) {
+        const normalisedTag = String(tag).trim().toLowerCase();
+        // Audience is controlled by the dedicated dropdown, not duplicated as a tag.
+        return normalisedTag !== "developer" && normalisedTag !== "product";
+      });
 
     elements.tagFilters.replaceChildren();
 
@@ -530,70 +547,178 @@
     state.entriesByProvider.set(provider.id, []);
     state.loadErrorsByProvider.delete(provider.id);
 
-    const endpoint = provider.api && typeof provider.api.endpoint === "string"
-      ? provider.api.endpoint.trim()
-      : "";
+    const feeds = getProviderFeeds(provider);
+
+    if (!feeds.length) {
+      state.loadErrorsByProvider.set(provider.id, [
+        {
+          audience: "product",
+          endpoint: "",
+          message: "No product or developer changelog feed is configured."
+        }
+      ]);
+      return;
+    }
+
+    const results = await Promise.all(
+      feeds.map(function (feed) {
+        return loadProviderFeed(provider, feed);
+      })
+    );
+
+    const entries = deduplicateEntries(
+      results.flatMap(function (result) {
+        return result.items;
+      })
+    );
+
+    const errors = results
+      .filter(function (result) {
+        return Boolean(result.error);
+      })
+      .map(function (result) {
+        return result.error;
+      });
+
+    state.entriesByProvider.set(provider.id, entries);
+
+    if (errors.length) {
+      state.loadErrorsByProvider.set(provider.id, errors);
+    }
+  }
+
+  function getProviderFeeds(provider) {
+    const feeds = [];
+    const configuredFeeds = provider && provider.feeds && typeof provider.feeds === "object"
+      ? provider.feeds
+      : null;
+
+    if (configuredFeeds) {
+      Object.keys(configuredFeeds).forEach(function (key) {
+        const configuredFeed = configuredFeeds[key];
+
+        if (!configuredFeed || typeof configuredFeed !== "object") {
+          return;
+        }
+
+        feeds.push({
+          audience: normaliseAudience(configuredFeed.audience || key, key),
+          id: firstText(configuredFeed.id, `${provider.id}_${key}_API`),
+          endpoint: firstText(configuredFeed.endpoint),
+          product: firstText(configuredFeed.product, provider.product),
+          previewEntries: Array.isArray(configuredFeed.previewEntries)
+            ? configuredFeed.previewEntries
+            : []
+        });
+      });
+    }
+
+    const hasProductFeed = feeds.some(function (feed) {
+      return feed.audience === "product";
+    });
+
+    // Backwards compatibility: today's single provider.api endpoint is a product feed.
+    if (!hasProductFeed && provider.api && typeof provider.api === "object") {
+      feeds.unshift({
+        audience: "product",
+        id: firstText(provider.api.id, `${provider.id}_product_API`),
+        endpoint: firstText(provider.api.endpoint),
+        product: provider.product,
+        previewEntries: Array.isArray(provider.previewEntries)
+          ? provider.previewEntries
+          : []
+      });
+    }
+
+    if (!feeds.length && Array.isArray(provider.previewEntries)) {
+      feeds.push({
+        audience: "product",
+        id: `${provider.id}_product_preview`,
+        endpoint: "",
+        product: provider.product,
+        previewEntries: provider.previewEntries
+      });
+    }
+
+    return feeds;
+  }
+
+  async function loadProviderFeed(provider, feed) {
+    const endpoint = typeof feed.endpoint === "string" ? feed.endpoint.trim() : "";
 
     if (!endpoint) {
-      if (config.previewMode && Array.isArray(provider.previewEntries)) {
-        const previewItems = provider.previewEntries
-          .map(function (item, index) {
-            return normaliseEntry(item, provider, index);
-          })
-          .filter(Boolean);
-
-        state.entriesByProvider.set(provider.id, previewItems);
+      if (config.previewMode && feed.previewEntries.length) {
+        return {
+          items: feed.previewEntries
+            .map(function (item, index) {
+              return normaliseEntry(item, provider, index, feed);
+            })
+            .filter(Boolean),
+          error: null
+        };
       }
-      return;
+
+      return {
+        items: [],
+        error: null
+      };
     }
 
     try {
       const response = await fetch(endpoint, {
-      method: "GET",
-      headers: {
-        Accept: "application/json"
+        method: "GET",
+        headers: {
+          Accept: "application/json"
+        }
+      });
+
+      const responseText = await response.text();
+      let payload = null;
+
+      try {
+        payload = responseText ? JSON.parse(responseText) : null;
+      } catch (parseError) {
+        payload = null;
       }
-    });
 
-    const responseText = await response.text();
+      if (!response.ok) {
+        const serverError =
+          payload && typeof payload.error === "string"
+            ? payload.error
+            : `API request failed with HTTP ${response.status}`;
 
-    let payload = null;
+        throw new Error(serverError);
+      }
 
-    try {
-      payload = responseText ? JSON.parse(responseText) : null;
-    } catch (parseError) {
-      payload = null;
-    }
+      if (!payload) {
+        throw new Error("The changelog API returned invalid JSON.");
+      }
 
-    if (!response.ok) {
-      const serverError =
-        payload && typeof payload.error === "string"
-          ? payload.error
-          : `API request failed with HTTP ${response.status}`;
-
-      throw new Error(serverError);
-    }
-
-    if (!payload) {
-      throw new Error("The changelog API returned invalid JSON.");
-    }
       const items = extractArray(payload)
         .map(function (item, index) {
-          return normaliseEntry(item, provider, index);
+          return normaliseEntry(item, provider, index, feed);
         })
         .filter(Boolean);
 
-      state.entriesByProvider.set(provider.id, items);
-
       if (!items.length) {
-        state.loadErrorsByProvider.set(provider.id, "The configured source returned no changelog entries.");
+        throw new Error("The configured source returned no changelog entries.");
       }
+
+      return {
+        items,
+        error: null
+      };
     } catch (error) {
-      state.entriesByProvider.set(provider.id, []);
-      state.loadErrorsByProvider.set(
-        provider.id,
-        error instanceof Error ? error.message : "The changelog source could not be loaded."
-      );
+      return {
+        items: [],
+        error: {
+          audience: feed.audience,
+          endpoint,
+          message: error instanceof Error
+            ? error.message
+            : "The changelog source could not be loaded."
+        }
+      };
     }
   }
 
@@ -617,7 +742,7 @@
     return possibleArrays.find(Array.isArray) || [];
   }
 
-  function normaliseEntry(item, provider, index) {
+  function normaliseEntry(item, provider, index, feed) {
     if (!item || typeof item !== "object") {
       return null;
     }
@@ -628,21 +753,75 @@
     }
 
     const rawTags = item.tags || item.types || item.categories || item.labels || item.changeType;
+    const audience = normaliseAudience(item.audience, feed.audience);
+    const tags = normaliseTags(rawTags).filter(function (tag) {
+      const normalisedTag = tag.toLowerCase();
+      return normalisedTag !== "developer" && normalisedTag !== "product";
+    });
 
     return {
-      id: firstText(item.id, item.slug) || `${provider.id}-${index}`,
+      id: firstText(item.id, item.slug) || `${provider.id}-${audience}-${index}`,
       providerId: provider.id,
       providerName: provider.name,
-      product: provider.product,
+      product: firstText(item.product, feed.product, provider.product),
+      audience,
       accent: provider.accent,
       colourMode: provider.colourMode || "single",
       palette: Array.isArray(provider.palette) ? provider.palette.slice(0, 4) : [],
-      title: title,
+      title,
       date: firstText(item.date, item.publishedAt, item.releaseDate, item.updatedAt, item.createdAt),
+      datePrecision: normaliseDatePrecision(item.datePrecision),
       summary: firstText(item.summary, item.description, item.body, item.details, item.content) || "No summary provided.",
-      tags: normaliseTags(rawTags),
+      tags,
       sourceUrl: firstText(item.sourceUrl, item.url, item.link, item.href)
     };
+  }
+
+  function normaliseDatePrecision(value) {
+    const candidate = firstText(value, "day").toLowerCase();
+    return candidate === "month" ? "month" : "day";
+  }
+
+  function normaliseAudience(value, fallback = "product") {
+    const candidate = firstText(value, fallback).toLowerCase();
+
+    if (candidate === "all") {
+      return "all";
+    }
+
+    if (candidate.includes("developer") || candidate === "dev" || candidate === "api") {
+      return "developer";
+    }
+
+    return "product";
+  }
+
+  function deduplicateEntries(entries) {
+    const byKey = new Map();
+
+    entries.forEach(function (entry) {
+      const key = [
+        entry.audience,
+        entry.date,
+        entry.title.toLowerCase().replace(/\s+/g, " ").trim()
+      ].join("|");
+
+      if (!byKey.has(key)) {
+        byKey.set(key, entry);
+        return;
+      }
+
+      const existing = byKey.get(key);
+
+      if (entry.summary.length > existing.summary.length) {
+        existing.summary = entry.summary;
+      }
+
+      existing.tags = Array.from(new Set(existing.tags.concat(entry.tags)));
+      existing.sourceUrl = existing.sourceUrl || entry.sourceUrl;
+    });
+
+    return Array.from(byKey.values());
   }
 
   function firstText() {
@@ -692,56 +871,74 @@
     }
 
     const entries = getFilteredEntries();
+    const dateGroups = groupEntriesByDate(entries);
     showArchive();
     disconnectChangeRowObserver();
 
     elements.archiveTitle.textContent = `${provider.product || provider.name} updates`;
     elements.archiveDescription.textContent = provider.description || `${provider.name} changelog entries.`;
-    elements.visibleUpdateCount.textContent = `${entries.length} update${entries.length === 1 ? "" : "s"}`;
+    elements.visibleUpdateCount.textContent = entries.length
+      ? `${entries.length} update${entries.length === 1 ? "" : "s"} across ${dateGroups.length} date${dateGroups.length === 1 ? "" : "s"}`
+      : "0 updates";
 
     if (!entries.length) {
       hidePagination();
-      elements.changelogFeed.innerHTML = createNoDataMarkup(
-        provider,
-        state.loadErrorsByProvider.get(provider.id) || ""
-      );
+      elements.changelogFeed.innerHTML = createNoDataMarkup(provider);
       return;
     }
 
-    const totalPages = Math.max(1, Math.ceil(entries.length / state.pageSize));
+    const totalPages = Math.max(1, Math.ceil(dateGroups.length / state.pageSize));
     state.currentPage = Math.min(Math.max(1, state.currentPage), totalPages);
 
     const startIndex = (state.currentPage - 1) * state.pageSize;
-    const pageEntries = entries.slice(startIndex, startIndex + state.pageSize);
+    const pageGroups = dateGroups.slice(startIndex, startIndex + state.pageSize);
 
     const list = document.createElement("div");
-    list.className = "changelogList";
+    list.className = "changelogList changelogDateList";
 
-    pageEntries.forEach(function (entry) {
-      list.appendChild(createChangeRow(entry));
+    pageGroups.forEach(function (group) {
+      list.appendChild(createDateGroup(group));
     });
 
-    elements.changelogFeed.replaceChildren(list);
-    renderPagination(entries.length, totalPages, startIndex, pageEntries.length);
+    const fragment = document.createDocumentFragment();
+    const warning = createFeedWarning(provider);
+
+    if (warning) {
+      fragment.appendChild(warning);
+    }
+
+    fragment.appendChild(list);
+    elements.changelogFeed.replaceChildren(fragment);
+
+    renderPagination(
+      dateGroups.length,
+      totalPages,
+      startIndex,
+      pageGroups,
+      entries.length
+    );
     observeChangeRows(list);
   }
 
-  function renderPagination(totalEntries, totalPages, startIndex, visibleEntries) {
+  function renderPagination(totalGroups, totalPages, startIndex, visibleGroups, totalEntries) {
     if (!elements.paginationControls || !elements.paginationStatus) {
       return;
     }
 
-    if (totalEntries <= state.pageSize) {
+    if (totalGroups <= state.pageSize) {
       hidePagination();
       return;
     }
 
     const firstVisible = startIndex + 1;
-    const lastVisible = startIndex + visibleEntries;
+    const lastVisible = startIndex + visibleGroups.length;
+    const visibleUpdates = visibleGroups.reduce(function (total, group) {
+      return total + group.totalEntries;
+    }, 0);
 
     elements.paginationControls.hidden = false;
     elements.paginationStatus.textContent =
-      `Showing ${firstVisible}–${lastVisible} of ${totalEntries} · Page ${state.currentPage} of ${totalPages}`;
+      `Dates ${firstVisible}–${lastVisible} of ${totalGroups} · ${visibleUpdates} shown / ${totalEntries} updates · Page ${state.currentPage} of ${totalPages}`;
 
     elements.previousPage.disabled = state.currentPage <= 1;
     elements.nextPage.disabled = state.currentPage >= totalPages;
@@ -754,8 +951,8 @@
   }
 
   function changeArchivePage(nextPage) {
-    const entries = getFilteredEntries();
-    const totalPages = Math.max(1, Math.ceil(entries.length / state.pageSize));
+    const groups = groupEntriesByDate(getFilteredEntries());
+    const totalPages = Math.max(1, Math.ceil(groups.length / state.pageSize));
     const safePage = Math.min(Math.max(1, nextPage), totalPages);
 
     if (safePage === state.currentPage) {
@@ -785,19 +982,86 @@
   function getFilteredEntries() {
     const entries = (state.entriesByProvider.get(state.activeProviderId) || []).slice();
 
-    const filtered = state.activeTag === "All changes"
-      ? entries
-      : entries.filter(function (entry) {
-          return entry.tags.some(function (tag) {
-            return tag.toLowerCase() === state.activeTag.toLowerCase();
-          });
-        });
+    return entries
+      .filter(function (entry) {
+        return state.audienceFilter === "all" || entry.audience === state.audienceFilter;
+      })
+      .filter(function (entry) {
+        if (state.activeTag === "All changes") {
+          return true;
+        }
 
-    return filtered.sort(function (a, b) {
-      const first = parseDate(a.date);
-      const second = parseDate(b.date);
-      return state.sortOrder === "oldest" ? first - second : second - first;
+        return entry.tags.some(function (tag) {
+          return tag.toLowerCase() === state.activeTag.toLowerCase();
+        });
+      })
+      .sort(function (a, b) {
+        const first = parseDate(a.date);
+        const second = parseDate(b.date);
+        return state.sortOrder === "oldest" ? first - second : second - first;
+      });
+  }
+
+  function groupEntriesByDate(entries) {
+    const groupsByDate = new Map();
+
+    entries.forEach(function (entry) {
+      const dateKey = entry.date || "date-unknown";
+
+      if (!groupsByDate.has(dateKey)) {
+        groupsByDate.set(dateKey, {
+          date: entry.date,
+          datePrecision: entry.datePrecision || "day",
+          timestamp: parseDate(entry.date),
+          accent: entry.accent,
+          colourMode: entry.colourMode,
+          palette: entry.palette,
+          product: [],
+          developer: [],
+          totalEntries: 0
+        });
+      }
+
+      const group = groupsByDate.get(dateKey);
+      const audience = entry.audience === "developer" ? "developer" : "product";
+      group[audience].push(entry);
+      group.totalEntries += 1;
     });
+
+    return Array.from(groupsByDate.values()).sort(function (first, second) {
+      return state.sortOrder === "oldest"
+        ? first.timestamp - second.timestamp
+        : second.timestamp - first.timestamp;
+    });
+  }
+
+  function createFeedWarning(provider) {
+    const errors = state.loadErrorsByProvider.get(provider.id) || [];
+    const visibleErrors = errors.filter(function (error) {
+      return state.audienceFilter === "all" || error.audience === state.audienceFilter;
+    });
+
+    if (!visibleErrors.length) {
+      return null;
+    }
+
+    const warning = document.createElement("section");
+    warning.className = "feedWarning";
+    warning.setAttribute("role", "status");
+
+    const title = document.createElement("strong");
+    title.textContent = "Some changelog feeds could not be loaded.";
+
+    const detail = document.createElement("span");
+    detail.textContent = visibleErrors
+      .map(function (error) {
+        const label = error.audience === "developer" ? "Developer" : "Product";
+        return `${label}: ${error.message}`;
+      })
+      .join(" ");
+
+    warning.append(title, detail);
+    return warning;
   }
 
   function parseDate(value) {
@@ -880,42 +1144,145 @@
     revealQueueDelay = 0;
   }
 
-  function createChangeRow(entry) {
+  function createDateGroup(group) {
     const article = document.createElement("article");
-    article.className = "changeRow";
-    applyProviderTheme(article, entry);
+    article.className = "changeRow changeDateGroup";
+    applyProviderTheme(article, group);
 
-    const safeEntryId = `${entry.providerId}-${entry.id}`.replace(/[^a-zA-Z0-9_-]/g, "-");
-    const summaryId = `change-summary-${safeEntryId}`;
+    const safeDate = (group.date || "unknown").replace(/[^a-zA-Z0-9_-]/g, "-");
+    const bodyId = `date-group-body-${safeDate}`;
+
+    const header = document.createElement("header");
+    header.className = "dateGroupHeader";
 
     const meta = document.createElement("div");
-    meta.className = "changeMeta";
+    meta.className = "changeMeta dateGroupMeta";
 
     const marker = document.createElement("span");
     marker.className = "changeMarker";
     marker.setAttribute("aria-hidden", "true");
 
     const date = document.createElement("time");
-    date.className = "changeDate";
-    date.dateTime = entry.date || "";
-    date.textContent = formatDate(entry.date);
+    date.className = "changeDate dateGroupDate";
+    date.dateTime = group.date || "";
+    date.textContent = formatDate(group.date, group.datePrecision);
 
-    const provider = document.createElement("span");
-    provider.className = "changeProvider";
-    provider.textContent = entry.product || entry.providerName;
+    const count = document.createElement("span");
+    count.className = "dateGroupCount";
+    count.textContent = `${group.totalEntries} update${group.totalEntries === 1 ? "" : "s"}`;
 
-    meta.append(marker, date, provider);
+    meta.append(marker, date, count);
+
+    const actions = document.createElement("div");
+    actions.className = "changeActions dateGroupActions";
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "sourceUnavailable changeExpandToggle";
+    toggle.textContent = "{}";
+    toggle.title = "Expand this date";
+    toggle.setAttribute(
+      "aria-label",
+      `Expand updates for ${formatDate(group.date, group.datePrecision)}`
+    );
+    toggle.setAttribute("aria-expanded", "false");
+    toggle.setAttribute("aria-controls", bodyId);
+    toggle.addEventListener("click", function () {
+      toggleChangeRow(article);
+    });
+
+    actions.appendChild(toggle);
+    header.append(meta, actions);
+
+    const body = document.createElement("div");
+    body.id = bodyId;
+    body.className = "dateGroupBody";
+
+    const sections = [];
+
+    if (group.product.length) {
+      sections.push(createAudienceSection("product", group.product));
+    }
+
+    if (group.developer.length) {
+      sections.push(createAudienceSection("developer", group.developer));
+    }
+
+    sections.forEach(function (section, index) {
+      if (index > 0) {
+        const divider = document.createElement("div");
+        divider.className = "audienceDivider";
+        divider.setAttribute("aria-hidden", "true");
+        body.appendChild(divider);
+      }
+
+      body.appendChild(section);
+    });
+
+    article.append(header, body);
+
+    // Clicking anywhere non-interactive on the date card expands all updates for that date.
+    article.addEventListener("click", function (event) {
+      if (event.target.closest("button, a, input, select, textarea, label")) {
+        return;
+      }
+
+      toggleChangeRow(article);
+    });
+
+    return article;
+  }
+
+  function createAudienceSection(audience, entries) {
+    const section = document.createElement("section");
+    section.className = `audienceSection ${audience}Section`;
+    section.dataset.audience = audience;
+
+    const heading = document.createElement("div");
+    heading.className = "audienceSectionHeader";
+
+    const icon = document.createElement("span");
+    icon.className = "audienceIcon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = audience === "developer" ? "</>" : "●";
+
+    const label = document.createElement("strong");
+    label.textContent = audience === "developer" ? "Developer" : "Product";
+
+    const count = document.createElement("span");
+    count.textContent = `${entries.length} release${entries.length === 1 ? "" : "s"}`;
+
+    heading.append(icon, label, count);
+    section.appendChild(heading);
+
+    const updates = document.createElement("div");
+    updates.className = "groupedUpdates";
+
+    entries.forEach(function (entry) {
+      updates.appendChild(createGroupedUpdate(entry));
+    });
+
+    section.appendChild(updates);
+    return section;
+  }
+
+  function createGroupedUpdate(entry) {
+    const update = document.createElement("article");
+    update.className = "groupedUpdate";
 
     const content = document.createElement("div");
-    content.className = "changeContent";
+    content.className = "groupedUpdateContent";
 
     const title = document.createElement("h3");
-    title.className = "changeTitle";
+    title.className = "changeTitle groupedUpdateTitle";
     title.textContent = entry.title;
 
+    const safeEntryId = `${entry.providerId}-${entry.audience}-${entry.id}`
+      .replace(/[^a-zA-Z0-9_-]/g, "-");
+
     const summary = document.createElement("p");
-    summary.id = summaryId;
-    summary.className = "changeSummary";
+    summary.id = `change-summary-${safeEntryId}`;
+    summary.className = "changeSummary groupedUpdateSummary";
     summary.textContent = entry.summary;
 
     const tags = document.createElement("div");
@@ -929,55 +1296,21 @@
     });
 
     content.append(title, summary, tags);
+    update.appendChild(content);
 
-    const source = createSourceControl(entry.sourceUrl, entry.title, article, summaryId);
-    article.append(meta, content, source);
-
-    // The full row can be clicked to reveal or collapse its details.
-    // Interactive controls inside the row keep their own independent behaviour.
-    article.addEventListener("click", function (event) {
-      if (event.target.closest("button, a, input, select, textarea, label")) {
-        return;
-      }
-
-      toggleChangeRow(article);
-    });
-
-    return article;
-  }
-
-  function createSourceControl(url, title, article, summaryId) {
-    const actions = document.createElement("div");
-    actions.className = "changeActions";
-
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "sourceUnavailable changeExpandToggle";
-    toggle.textContent = "{}";
-    toggle.title = "Expand changelog details";
-    toggle.setAttribute("aria-label", `Expand details for ${title}`);
-    toggle.setAttribute("aria-expanded", "false");
-    toggle.setAttribute("aria-controls", summaryId);
-
-    toggle.addEventListener("click", function () {
-      toggleChangeRow(article);
-    });
-
-    actions.appendChild(toggle);
-
-    if (isSafeHttpUrl(url)) {
+    if (isSafeHttpUrl(entry.sourceUrl)) {
       const link = document.createElement("a");
-      link.className = "sourceLink";
-      link.href = url;
+      link.className = "sourceLink groupedSourceLink";
+      link.href = entry.sourceUrl;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
       link.textContent = "↗";
       link.title = "Open official changelog source";
-      link.setAttribute("aria-label", `Open official source for ${title}`);
-      actions.appendChild(link);
+      link.setAttribute("aria-label", `Open official source for ${entry.title}`);
+      update.appendChild(link);
     }
 
-    return actions;
+    return update;
   }
 
   function toggleChangeRow(article) {
@@ -999,10 +1332,13 @@
   }
 
   function setChangeRowExpanded(article, expanded) {
-    const summary = article.querySelector(".changeSummary");
+    const body = article.querySelector(".dateGroupBody");
 
-    if (summary && expanded) {
-      article.style.setProperty("--summary-expanded-height", `${summary.scrollHeight}px`);
+    if (body && expanded) {
+      article.style.setProperty(
+        "--summary-expanded-height",
+        `${Math.max(320, body.scrollHeight + 120)}px`
+      );
     }
 
     article.classList.toggle("isExpanded", expanded);
@@ -1013,14 +1349,14 @@
     }
 
     toggle.textContent = expanded ? "{...}" : "{}";
-    toggle.title = expanded ? "Collapse changelog details" : "Expand changelog details";
+    toggle.title = expanded ? "Collapse this date" : "Expand this date";
     toggle.setAttribute("aria-expanded", String(expanded));
 
-    const title = article.querySelector(".changeTitle");
-    const entryTitle = title ? title.textContent : "this update";
+    const date = article.querySelector(".dateGroupDate");
+    const dateText = date ? date.textContent : "this date";
     toggle.setAttribute(
       "aria-label",
-      `${expanded ? "Collapse" : "Expand"} details for ${entryTitle}`
+      `${expanded ? "Collapse" : "Expand"} updates for ${dateText}`
     );
   }
 
@@ -1037,30 +1373,70 @@
     }
   }
 
-  function formatDate(value) {
+  function formatDate(value, precision = "day") {
     const timestamp = Date.parse(value || "");
 
     if (Number.isNaN(timestamp)) {
       return "Date unknown";
     }
 
+    if (precision === "month") {
+      return new Intl.DateTimeFormat("en", {
+        month: "long",
+        year: "numeric",
+        timeZone: "UTC"
+      }).format(new Date(timestamp));
+    }
+
     return new Intl.DateTimeFormat("en", {
       day: "2-digit",
       month: "short",
-      year: "numeric"
+      year: "numeric",
+      timeZone: "UTC"
     }).format(new Date(timestamp));
   }
 
-  function createNoDataMarkup(provider, detail = "") {
-    const apiId = provider && provider.api ? provider.api.id : "configured API slot";
+  function createNoDataMarkup(provider) {
     const providerName = provider ? provider.product || provider.name : "this AI";
-    const endpoint = provider && provider.api && typeof provider.api.endpoint === "string"
-      ? provider.api.endpoint.trim()
-      : "";
+    const allEntries = provider
+      ? state.entriesByProvider.get(provider.id) || []
+      : [];
+    const feeds = provider ? getProviderFeeds(provider) : [];
+    const configuredAudiences = new Set(feeds.map(function (feed) {
+      return feed.audience;
+    }));
+    const errors = provider
+      ? state.loadErrorsByProvider.get(provider.id) || []
+      : [];
+    const visibleErrors = errors.filter(function (error) {
+      return state.audienceFilter === "all" || error.audience === state.audienceFilter;
+    });
 
-    const message = endpoint
-      ? `${providerName} data could not be loaded from ${endpoint}.${detail ? ` ${detail}` : ""}`
-      : `No changelog endpoint is configured for ${providerName}. Add one to ${apiId} inside ai-encyclopedia.config.js.`;
+    let message = `No changelog data is currently available for ${providerName}.`;
+
+    if (
+      state.audienceFilter !== "all" &&
+      !configuredAudiences.has(state.audienceFilter)
+    ) {
+      const label = state.audienceFilter === "developer" ? "Developer" : "Product";
+      message = `No ${label} changelog endpoint is configured for ${providerName} yet.`;
+    } else if (visibleErrors.length) {
+      message = visibleErrors
+        .map(function (error) {
+          const label = error.audience === "developer" ? "Developer" : "Product";
+          const endpoint = error.endpoint ? ` from ${error.endpoint}` : "";
+          return `${label} data could not be loaded${endpoint}. ${error.message}`;
+        })
+        .join(" ");
+    } else if (allEntries.length) {
+      const audienceLabel = state.audienceFilter === "all"
+        ? ""
+        : `${state.audienceFilter === "developer" ? "Developer" : "Product"} `;
+      const tagLabel = state.activeTag === "All changes"
+        ? ""
+        : `${state.activeTag} `;
+      message = `No ${audienceLabel}${tagLabel}updates match the current filters.`;
+    }
 
     return `
       <section class="emptyState" role="status">
