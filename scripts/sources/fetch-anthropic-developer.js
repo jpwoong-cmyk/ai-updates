@@ -1,7 +1,8 @@
-import * as cheerio from "cheerio";
-
 export const ANTHROPIC_DEVELOPER_CHANGELOG_URL =
   "https://platform.claude.com/docs/en/release-notes/overview";
+
+const ANTHROPIC_DEVELOPER_CHANGELOG_FEED_URL =
+  "https://platform.claude.com/docs/en/release-notes/overview.md";
 
 const DATE_PATTERN =
   /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:st|nd|rd|th)?,\s+(\d{4})$/i;
@@ -28,9 +29,9 @@ export async function fetchAnthropicDeveloperChangelog(options = {}) {
     throw new Error("A fetch implementation is required.");
   }
 
-  const response = await fetchImpl(ANTHROPIC_DEVELOPER_CHANGELOG_URL, {
+  const response = await fetchImpl(ANTHROPIC_DEVELOPER_CHANGELOG_FEED_URL, {
     headers: {
-      Accept: "text/html,application/xhtml+xml",
+      Accept: "text/markdown,text/plain;q=0.9,*/*;q=0.8",
       "Accept-Language": "en-US,en;q=0.9",
       "User-Agent": "Mini-AI-Encyclopedia/1.2 (+https://vercel.com)"
     },
@@ -46,72 +47,56 @@ export async function fetchAnthropicDeveloperChangelog(options = {}) {
   return parseAnthropicDeveloperChangelog(await response.text());
 }
 
-export function parseAnthropicDeveloperChangelog(html) {
-  if (typeof html !== "string" || !html.trim()) {
-    throw new Error("Claude Platform release-notes HTML was empty.");
+export function parseAnthropicDeveloperChangelog(markdown) {
+  if (typeof markdown !== "string" || !markdown.trim()) {
+    throw new Error("Claude Platform release-notes Markdown was empty.");
   }
 
-  const $ = cheerio.load(html);
-  const articleRoot = findArticleRoot($);
-  const allNodes = articleRoot.find("*").toArray();
-  const dateHeadings = findDateHeadings($, articleRoot).toArray();
+  const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
+  const sections = [];
+  let currentSection = null;
 
-  if (!dateHeadings.length) {
+  lines.forEach(function (line) {
+    const headingMatch = line.trim().match(/^#{1,6}\s+(.+?)\s*#*$/);
+
+    if (headingMatch) {
+      const headingText = cleanMarkdownText(headingMatch[1]);
+      const date = normaliseDate(headingText);
+
+      if (date) {
+        currentSection = {
+          date,
+          lines: []
+        };
+        sections.push(currentSection);
+        return;
+      }
+
+      // Once another non-date heading begins, stop attaching content to the
+      // previous release date. This prevents unrelated documentation sections
+      // from being treated as changelog entries.
+      if (currentSection) {
+        currentSection = null;
+      }
+      return;
+    }
+
+    if (currentSection) {
+      currentSection.lines.push(line);
+    }
+  });
+
+  if (!sections.length) {
     throw new Error(
-      "No Claude Platform release-date headings were found. Anthropic may have changed the page markup."
+      "No Claude Platform release-date headings were found in the official Markdown feed."
     );
   }
 
   const entries = [];
 
-  dateHeadings.forEach(function (headingNode, headingIndex) {
-    const heading = $(headingNode);
-    const dateText = cleanText(heading.attr("data-text") || heading.text());
-    const date = normaliseDate(dateText);
-
-    if (!date) {
-      return;
-    }
-
-    const startIndex = allNodes.indexOf(headingNode);
-    const nextHeading = dateHeadings[headingIndex + 1];
-    const endIndex = nextHeading ? allNodes.indexOf(nextHeading) : allNodes.length;
-
-    if (startIndex < 0 || endIndex <= startIndex) {
-      return;
-    }
-
-    const sectionNodes = allNodes.slice(startIndex + 1, endIndex);
-    const topLevelItems = sectionNodes.filter(function (node) {
-      const element = $(node);
-      return element.is("li") && !element.parents("li").length;
-    });
-
-    if (topLevelItems.length) {
-      topLevelItems.forEach(function (itemNode) {
-        const summary = formatListItem($, $(itemNode));
-        if (!summary) {
-          return;
-        }
-
-        entries.push(createEntry(date, summary, heading));
-      });
-      return;
-    }
-
-    const paragraphs = sectionNodes
-      .filter(function (node) {
-        return $(node).is("p") && !$(node).parents("li").length;
-      })
-      .map(function (node) {
-        return cleanText($(node).text());
-      })
-      .filter(function (text) {
-        return text && text !== "";
-      });
-
-    paragraphs.forEach(function (summary) {
-      entries.push(createEntry(date, summary, heading));
+  sections.forEach(function (section) {
+    parseSectionEntries(section.lines).forEach(function (summary) {
+      entries.push(createEntry(section.date, summary));
     });
   });
 
@@ -121,100 +106,114 @@ export function parseAnthropicDeveloperChangelog(html) {
 
   if (!deduplicated.length) {
     throw new Error(
-      "Claude Platform date headings were found, but no release entries could be extracted."
+      "Claude Platform date headings were found, but no release entries could be extracted from the official Markdown feed."
     );
   }
 
   return deduplicated;
 }
 
-function findArticleRoot($) {
-  const selectors = [
-    "main article",
-    "article",
-    "main",
-    "[role='main']"
-  ];
+function parseSectionEntries(lines) {
+  const topLevelItems = [];
+  let currentItem = null;
 
-  for (const selector of selectors) {
-    const match = $(selector).first();
-    if (match.length && findDateHeadings($, match).length) {
-      return match;
-    }
-  }
+  lines.forEach(function (line) {
+    const bulletMatch = line.match(/^(\s*)[-*+]\s+(.+)$/);
 
-  return $.root();
-}
+    if (bulletMatch) {
+      const indent = bulletMatch[1].replace(/\t/g, "    ").length;
+      const text = cleanMarkdownText(bulletMatch[2]);
 
-function findDateHeadings($, root) {
-  const semanticHeadings = root.find(
-    "h1, h2, h3, h4, h5, h6, [role='heading']"
-  ).filter(function () {
-    const element = $(this);
-    const text = cleanText(
-      element.attr("data-text") ||
-      element.attr("aria-label") ||
-      element.text()
-    );
-
-    return DATE_PATTERN.test(text);
-  });
-
-  if (semanticHeadings.length) {
-    return semanticHeadings;
-  }
-
-  /*
-   * Anthropic's documentation site may render release dates inside
-   * non-semantic elements. Search leaf-like elements as a fallback,
-   * while avoiding large wrapper elements containing an entire section.
-   */
-  return root.find("div, span, p, time").filter(function () {
-    const element = $(this);
-
-    const text = cleanText(
-      element.attr("datetime") ||
-      element.attr("data-text") ||
-      element.attr("aria-label") ||
-      element.text()
-    );
-
-    if (!DATE_PATTERN.test(text)) {
-      return false;
-    }
-
-    const childText = element.children().toArray().some(function (child) {
-      return DATE_PATTERN.test(cleanText($(child).text()));
-    });
-
-    return !childText;
-  });
-}
-
-function formatListItem($, item, depth = 0) {
-  const copy = item.clone();
-  copy.children("ul, ol").remove();
-
-  const lines = [];
-  const mainText = cleanText(copy.text());
-
-  if (mainText) {
-    lines.push(`${"  ".repeat(depth)}• ${mainText}`);
-  }
-
-  item.children("ul, ol").each(function () {
-    $(this).children("li").each(function () {
-      const nested = formatListItem($, $(this), depth + 1);
-      if (nested) {
-        lines.push(nested);
+      if (!text) {
+        return;
       }
-    });
+
+      if (indent === 0) {
+        if (currentItem) {
+          topLevelItems.push(formatCollectedItem(currentItem));
+        }
+
+        currentItem = {
+          main: text,
+          nested: []
+        };
+        return;
+      }
+
+      if (currentItem) {
+        const depth = Math.max(1, Math.ceil(indent / 2));
+        currentItem.nested.push(`${"  ".repeat(depth)}• ${text}`);
+      }
+      return;
+    }
+
+    const text = cleanMarkdownText(line);
+
+    if (currentItem && text) {
+      // Markdown often wraps a single list item across multiple physical lines.
+      // Keep those lines with the same release item.
+      currentItem.main += ` ${text}`;
+    }
   });
 
-  return lines.join("\n").trim();
+  if (currentItem) {
+    topLevelItems.push(formatCollectedItem(currentItem));
+  }
+
+  const cleanedItems = topLevelItems.filter(Boolean);
+  if (cleanedItems.length) {
+    return cleanedItems;
+  }
+
+  // Fallback for any future release-date section that uses paragraphs instead
+  // of a bullet list.
+  return splitParagraphs(lines)
+    .map(cleanMarkdownText)
+    .filter(Boolean);
 }
 
-function createEntry(date, summary, heading) {
+function formatCollectedItem(item) {
+  const main = cleanText(item.main);
+  if (!main) {
+    return "";
+  }
+
+  return [`• ${main}`].concat(item.nested).join("\n").trim();
+}
+
+function splitParagraphs(lines) {
+  const paragraphs = [];
+  let buffer = [];
+
+  function flush() {
+    const paragraph = buffer.join(" ").trim();
+    if (paragraph) {
+      paragraphs.push(paragraph);
+    }
+    buffer = [];
+  }
+
+  lines.forEach(function (line) {
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      flush();
+      return;
+    }
+
+    if (/^[-*+]\s+/.test(trimmed)) {
+      flush();
+      return;
+    }
+
+    buffer.push(trimmed);
+  });
+
+  flush();
+  return paragraphs;
+}
+
+function createEntry(date, summary) {
   const title = createTitle(summary);
 
   return {
@@ -228,7 +227,7 @@ function createEntry(date, summary, heading) {
     datePrecision: "day",
     summary,
     tags: classifyAnthropicDeveloperTags(title, summary),
-    sourceUrl: buildSourceUrl(heading)
+    sourceUrl: ANTHROPIC_DEVELOPER_CHANGELOG_URL
   };
 }
 
@@ -246,7 +245,7 @@ function classifyAnthropicDeveloperTags(title, summary) {
   const text = `${title} ${summary}`.toLowerCase();
   const tags = [];
 
-  if (containsAny(text, ["deprecated", "deprecation", "retired", "retirement", "removed", "end of support"])) {
+  if (containsAny(text, ["deprecated", "deprecation", "retired", "retirement", "removed", "end of support", "sunset", "sunsetting"])) {
     tags.push("Deprecated");
   }
 
@@ -295,14 +294,6 @@ function normaliseDate(value) {
   return `${match[3]}-${month}-${String(match[2]).padStart(2, "0")}`;
 }
 
-function buildSourceUrl(heading) {
-  const id = heading.attr("id") || heading.closest("[id]").attr("id");
-
-  return id
-    ? `${ANTHROPIC_DEVELOPER_CHANGELOG_URL}#${encodeURIComponent(id)}`
-    : ANTHROPIC_DEVELOPER_CHANGELOG_URL;
-}
-
 function deduplicateEntries(entries) {
   const byKey = new Map();
 
@@ -343,6 +334,20 @@ function slugify(value) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 80) || "update";
+}
+
+function cleanMarkdownText(value) {
+  return cleanText(
+    String(value || "")
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      .replace(/`([^`]+)`/g, "$1")
+      .replace(/\*\*([^*]+)\*\*/g, "$1")
+      .replace(/__([^_]+)__/g, "$1")
+      .replace(/~~([^~]+)~~/g, "$1")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/[\\*_~]/g, "")
+  );
 }
 
 function cleanText(value) {
