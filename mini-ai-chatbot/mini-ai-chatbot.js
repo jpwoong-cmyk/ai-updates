@@ -14,7 +14,8 @@ function boot() {
   const panel = new MiniAiChatPanel(MINI_AI_CHATBOT_CONFIG);
 
   const floating = createMiniAiBot({
-    label: "Open Mini AI Encyclopedia chatbot"
+    label: "Open Mini AI Encyclopedia chatbot",
+    helperText: MINI_AI_CHATBOT_CONFIG.helperBubbleText
   });
 
   document.body.appendChild(floating.root);
@@ -24,21 +25,18 @@ function boot() {
 
   monitorProviderDock({
     floatingRoot: floating.root,
-    dockCompanion,
-    panel
+    dockCompanion
   });
 }
 
 function injectCss() {
   const id = "mai-chatbot-styles";
-
   if (document.getElementById(id)) return;
 
   const link = document.createElement("link");
   link.id = id;
   link.rel = "stylesheet";
   link.href = CSS_URL.href;
-
   document.head.appendChild(link);
 }
 
@@ -49,7 +47,8 @@ function createDockCompanion(panel) {
 
   const pixelBot = createMiniAiBot({
     pixel: true,
-    label: "Open Mini AI Encyclopedia chatbot"
+    label: "Open Mini AI Encyclopedia chatbot",
+    helperText: MINI_AI_CHATBOT_CONFIG.helperBubbleText
   });
 
   companion.appendChild(pixelBot.root);
@@ -133,8 +132,6 @@ function monitorProviderDock({ floatingRoot, dockCompanion }) {
   window.addEventListener("scroll", sync, { passive: true });
   window.addEventListener("resize", sync);
 
-  // Your provider dock is dynamically controlled by existing app logic.
-  // Watch the page in case it is rebuilt/replaced.
   const bodyObserver = new MutationObserver(() => {
     const current = document.querySelector(MINI_AI_CHATBOT_CONFIG.dockSelector);
 
@@ -159,34 +156,23 @@ function isDockVisible(dock) {
   if (dock.getAttribute("aria-hidden") === "true") return false;
 
   const style = getComputedStyle(dock);
-
   if (style.display === "none" || style.visibility === "hidden") return false;
 
   const rect = dock.getBoundingClientRect();
 
-  return (
-    rect.width > 20 &&
-    rect.height > 20 &&
-    rect.bottom > 0 &&
-    rect.top < window.innerHeight
-  );
+  return rect.width > 20 && rect.height > 20 && rect.bottom > 0 && rect.top < window.innerHeight;
 }
 
 function positionCompanionAboveDock(companion, dock) {
   const rect = dock.getBoundingClientRect();
-  const width = companion.offsetWidth || 160;
-  const height = companion.offsetHeight || 132;
+  const width = companion.offsetWidth || 116;
+  const height = companion.offsetHeight || 96;
+  const inset = 8;
 
-  const left = clamp(
-    rect.left + rect.width / 2 - width / 2,
-    8,
-    window.innerWidth - width - 8
-  );
-
-  const top = Math.max(
-    8,
-    rect.top - height - MINI_AI_CHATBOT_CONFIG.dockGapPx
-  );
+  // User requested the dock companion to sit at the end-right and fit the screen.
+  const preferredLeft = rect.right - width - 10;
+  const left = clamp(preferredLeft, inset, window.innerWidth - width - inset);
+  const top = Math.max(inset, rect.top - height - MINI_AI_CHATBOT_CONFIG.dockGapPx);
 
   companion.style.left = `${Math.round(left)}px`;
   companion.style.top = `${Math.round(top)}px`;

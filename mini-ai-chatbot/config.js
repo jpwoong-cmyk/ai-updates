@@ -4,15 +4,14 @@ export const MINI_AI_CHATBOT_CONFIG = {
   // Existing Mini AI Encyclopedia provider dock.
   dockSelector: "#providerRobotDock",
 
-  // Floating launcher remains visible whenever the provider dock is hidden.
   floatingLauncher: true,
 
-  // Position of the rebuilt pixel robot above the provider dock.
-  dockGapPx: 14,
+  // Position of rebuilt companion above the provider dock.
+  dockGapPx: 10,
 
-  // Slow reconstruction requested for the scroll state.
-  pixelBuildDurationMs: 1900,
-  pixelDisassembleDurationMs: 420,
+  // Keep the slow rebuild, but the visual is now a smaller AI dot-matrix robot.
+  pixelBuildDurationMs: 1700,
+  pixelDisassembleDurationMs: 320,
 
   panelTitle: "Mini AI Encyclopedia",
   panelSubtitle: "Ask about AI product & developer updates",
@@ -27,6 +26,9 @@ export const MINI_AI_CHATBOT_CONFIG = {
     "Compare recent Claude and OpenAI developer updates.",
     "Any recent Copilot deprecations?"
   ],
+
+  // Comic-style helper bubble
+  helperBubbleText: "Chat with me!",
 
   // Client keeps only a short conversation tail. Evidence is retrieved fresh per question.
   maxClientHistoryMessages: 8

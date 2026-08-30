@@ -1,4 +1,16 @@
-export function createMiniAiBot({ pixel = false, label = "Open AI assistant" } = {}) {
+function makeComicBubble(text) {
+  return `
+    <span class="mai-comic-bubble" aria-hidden="true">
+      <span class="mai-comic-bubble__text">${escapeHtml(text)}</span>
+    </span>
+  `;
+}
+
+export function createMiniAiBot({
+  pixel = false,
+  label = "Open AI assistant",
+  helperText = "Chat with me!"
+} = {}) {
   if (pixel) {
     const button = document.createElement("button");
     button.type = "button";
@@ -9,6 +21,7 @@ export function createMiniAiBot({ pixel = false, label = "Open AI assistant" } =
     grid.className = "mai-pixel-grid";
     grid.setAttribute("aria-hidden", "true");
 
+    button.innerHTML = makeComicBubble(helperText);
     button.appendChild(grid);
     return { root: button, grid };
   }
@@ -18,7 +31,9 @@ export function createMiniAiBot({ pixel = false, label = "Open AI assistant" } =
   button.className = "mai-floating-launcher";
   button.setAttribute("aria-label", label);
   button.innerHTML = `
+    ${makeComicBubble(helperText)}
     <span class="mai-bot" aria-hidden="true">
+      <span class="mai-bot__aura"></span>
       <span class="mai-bot__antenna">
         <span class="mai-bot__antenna-light"></span>
       </span>
@@ -35,9 +50,16 @@ export function createMiniAiBot({ pixel = false, label = "Open AI assistant" } =
         <span class="mai-bot__mouth"></span>
       </span>
     </span>
-
-    <span class="mai-launcher-tooltip">Ask Mini AI</span>
   `;
 
   return { root: button };
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
