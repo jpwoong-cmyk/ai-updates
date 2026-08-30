@@ -1,10 +1,3 @@
-/**
- * AI ENCYCLOPEDIA CONFIGURATION
- * ------------------------------------------------------------------
- * Each provider has a Product feed and a Developer feed.
- * The provider array remains the single source of truth for the UI.
- */
-
 window.AI_ENCYCLOPEDIA_CONFIG = {
   "previewMode": true,
   "defaultTags": [
@@ -107,6 +100,34 @@ window.AI_ENCYCLOPEDIA_CONFIG = {
           "id": "copilot_developer_API",
           "product": "Microsoft 365 Copilot Extensibility",
           "endpoint": "/api/copilot-developer"
+        }
+      }
+    },
+    {
+      "id": "xai",
+      "name": "xAI",
+      "product": "Grok",
+      "shortLabel": "Grok",
+      "initials": "xAI",
+      "colourMode": "palette",
+      "accent": "#f4f4f4",
+      "palette": [
+        "#ffffff",
+        "#d8d8d8",
+        "#f5f5f5",
+        "#555555"
+      ],
+      "description": "Grok product updates and xAI developer platform releases.",
+      "feeds": {
+        "product": {
+          "id": "xai_product_API",
+          "product": "Grok",
+          "endpoint": "/api/xai"
+        },
+        "developer": {
+          "id": "xai_developer_API",
+          "product": "Grok / xAI API",
+          "endpoint": "/api/xai-developer"
         }
       }
     }
