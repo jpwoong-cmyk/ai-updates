@@ -15,8 +15,6 @@ export default async function handler(request, response) {
     const result =
       await getAllProviderStatuses();
 
-    // Vercel Hobby friendly:
-    // browsers can poll every 3 minutes while Vercel serves cached results.
     response.setHeader(
       "Cache-Control",
       "public, s-maxage=180, stale-while-revalidate=600"
@@ -24,6 +22,7 @@ export default async function handler(request, response) {
 
     return response.status(200).json({
       service: "ai-provider-status",
+      mode: "api-only",
       ...result
     });
   } catch (error) {
@@ -39,6 +38,7 @@ export default async function handler(request, response) {
 
     return response.status(500).json({
       service: "ai-provider-status",
+      mode: "api-only",
       error:
         error instanceof Error
           ? error.message
