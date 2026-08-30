@@ -1,0 +1,589 @@
+/*
+  AI STATUS TICKER
+  ------------------------------------------------------------
+  A narrow live-status strip designed to sit directly beneath
+  .heroRobotPatrol's horizontal line.
+
+  Green = confirmed operational.
+  Red   = degradation / outage / maintenance / unavailable signal.
+*/
+
+.aiStatusTicker {
+  --ticker-green: #63e2ad;
+  --ticker-red: #ff5d6f;
+  --ticker-red-soft: rgba(255, 93, 111, 0.12);
+  --ticker-line: rgba(255, 255, 255, 0.09);
+
+  position: relative;
+  z-index: 8;
+
+  display: grid;
+  width: min(100%, 760px);
+  height: 32px;
+  grid-template-columns: auto minmax(0, 1fr) 30px;
+  align-items: stretch;
+
+  /* Pull it straight underneath the patrol's line. */
+  margin: -24px auto 12px;
+
+  overflow: hidden;
+
+  border-bottom:
+    1px solid var(--ticker-line);
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(9, 12, 20, 0.9),
+      rgba(10, 14, 23, 0.5) 44%,
+      rgba(10, 14, 23, 0.2)
+    );
+
+  color: #c9d0df;
+
+  font-size: 10px;
+  line-height: 1;
+  text-align: left;
+
+  backdrop-filter: blur(8px);
+}
+
+.aiStatusTicker::before {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  left: 0;
+
+  height: 1px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(126, 149, 255, 0.22),
+      transparent
+    );
+
+  content: "";
+  pointer-events: none;
+}
+
+.aiStatusTicker.has-issue::before {
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 93, 111, 0.75),
+      transparent
+    );
+
+  animation:
+    aiStatusWarningLine
+    1.8s ease-in-out infinite;
+}
+
+.aiStatusTicker__signal {
+  position: relative;
+  z-index: 5;
+
+  display: inline-flex;
+  min-width: 105px;
+  align-items: center;
+  gap: 7px;
+
+  padding-inline: 10px 12px;
+
+  border-right:
+    1px solid var(--ticker-line);
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(8, 11, 18, 0.98),
+      rgba(8, 11, 18, 0.9)
+    );
+
+  color: #edf1fa;
+
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+}
+
+.aiStatusTicker__radar {
+  position: relative;
+
+  width: 7px;
+  height: 7px;
+
+  flex: 0 0 auto;
+
+  border-radius: 50%;
+
+  background:
+    var(--ticker-green);
+
+  box-shadow:
+    0 0 0 3px rgba(99, 226, 173, 0.08);
+}
+
+.aiStatusTicker__radar::after {
+  position: absolute;
+  inset: -4px;
+
+  border:
+    1px solid rgba(99, 226, 173, 0.4);
+
+  border-radius: 50%;
+
+  content: "";
+
+  animation:
+    aiStatusRadar
+    1.8s ease-out infinite;
+}
+
+.aiStatusTicker.has-issue
+.aiStatusTicker__radar {
+  background:
+    var(--ticker-red);
+
+  box-shadow:
+    0 0 0 3px rgba(255, 93, 111, 0.08);
+}
+
+.aiStatusTicker.has-issue
+.aiStatusTicker__radar::after {
+  border-color:
+    rgba(255, 93, 111, 0.55);
+}
+
+.aiStatusTicker__summary {
+  color: #6f7a90;
+
+  font-size: 7px;
+  letter-spacing: 0.09em;
+}
+
+.aiStatusTicker.has-issue
+.aiStatusTicker__summary {
+  color: var(--ticker-red);
+}
+
+.aiStatusTicker__viewport {
+  position: relative;
+
+  min-width: 0;
+
+  overflow: hidden;
+
+  mask-image:
+    linear-gradient(
+      90deg,
+      transparent,
+      #000 14px,
+      #000 calc(100% - 14px),
+      transparent
+    );
+
+  -webkit-mask-image:
+    linear-gradient(
+      90deg,
+      transparent,
+      #000 14px,
+      #000 calc(100% - 14px),
+      transparent
+    );
+}
+
+.aiStatusTicker__marquee {
+  display: flex;
+  width: max-content;
+  min-width: 100%;
+  align-items: center;
+
+  animation:
+    aiStatusMarquee
+    38s linear infinite;
+
+  will-change: transform;
+}
+
+.aiStatusTicker:hover
+.aiStatusTicker__marquee,
+.aiStatusTicker:focus-within
+.aiStatusTicker__marquee {
+  animation-play-state: paused;
+}
+
+.aiStatusTicker__group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.aiStatusTicker__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  height: 31px;
+
+  padding-inline: 12px;
+
+  color: #aab4c7;
+
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.aiStatusTicker__item strong {
+  color: #f3f6fc;
+
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.aiStatusTicker__dot {
+  width: 5px;
+  height: 5px;
+
+  flex: 0 0 auto;
+
+  border-radius: 50%;
+
+  background:
+    var(--ticker-green);
+
+  box-shadow:
+    0 0 7px rgba(99, 226, 173, 0.38);
+}
+
+.aiStatusTicker__state {
+  color: var(--ticker-green);
+
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.aiStatusTicker__detail {
+  max-width: 310px;
+
+  overflow: hidden;
+
+  color: #778196;
+
+  font-size: 8px;
+
+  text-overflow: ellipsis;
+}
+
+.aiStatusTicker__item.is-problem {
+  color: #ffd9dd;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      var(--ticker-red-soft),
+      transparent
+    );
+
+  cursor: pointer;
+
+  transition:
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.aiStatusTicker__item.is-problem
+.aiStatusTicker__dot {
+  background:
+    var(--ticker-red);
+
+  box-shadow:
+    0 0 8px rgba(255, 93, 111, 0.55);
+
+  animation:
+    aiStatusProblemDot
+    1.2s ease-in-out infinite;
+}
+
+.aiStatusTicker__item.is-problem
+.aiStatusTicker__state {
+  color:
+    var(--ticker-red);
+}
+
+.aiStatusTicker__item.is-problem
+.aiStatusTicker__detail {
+  color:
+    rgba(255, 184, 193, 0.76);
+}
+
+.aiStatusTicker__item.is-problem:hover {
+  background:
+    rgba(255, 93, 111, 0.12);
+
+  color: #ffffff;
+}
+
+.aiStatusTicker__external {
+  margin-left: 2px;
+
+  color:
+    var(--ticker-red);
+
+  font-size: 10px;
+}
+
+.aiStatusTicker__separator {
+  color:
+    rgba(133, 149, 181, 0.28);
+
+  font-size: 5px;
+}
+
+.aiStatusTicker__refresh {
+  position: relative;
+  z-index: 5;
+
+  display: grid;
+  width: 30px;
+  height: 31px;
+  place-items: center;
+
+  padding: 0;
+
+  border: 0;
+  border-left:
+    1px solid var(--ticker-line);
+
+  background:
+    rgba(8, 11, 18, 0.84);
+
+  color: #69758a;
+
+  font-size: 13px;
+
+  cursor: pointer;
+
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
+}
+
+.aiStatusTicker__refresh:hover {
+  background:
+    rgba(143, 162, 255, 0.07);
+
+  color: #dce3f4;
+}
+
+.aiStatusTicker.is-refreshing
+.aiStatusTicker__refresh {
+  animation:
+    aiStatusRefreshSpin
+    0.8s linear infinite;
+}
+
+.aiStatusTicker__loading {
+  display: flex;
+  height: 31px;
+  align-items: center;
+
+  padding-inline: 16px;
+
+  color: #69758a;
+
+  font-size: 8px;
+  font-weight: 750;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+
+.aiStatusTicker__loading.is-error {
+  color:
+    var(--ticker-red);
+}
+
+@keyframes aiStatusMarquee {
+  from {
+    transform:
+      translateX(0);
+  }
+
+  to {
+    transform:
+      translateX(-50%);
+  }
+}
+
+@keyframes aiStatusRadar {
+  from {
+    opacity: 0.85;
+    transform:
+      scale(0.55);
+  }
+
+  to {
+    opacity: 0;
+    transform:
+      scale(1.65);
+  }
+}
+
+@keyframes aiStatusProblemDot {
+  0%,
+  100% {
+    opacity: 0.62;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes aiStatusWarningLine {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes aiStatusRefreshSpin {
+  to {
+    transform:
+      rotate(360deg);
+  }
+}
+
+/* Mobile: keep the line/ticker compact instead of becoming a giant panel. */
+@media (max-width: 720px) {
+  .aiStatusTicker {
+    width: min(100%, 620px);
+    height: 29px;
+    grid-template-columns:
+      auto minmax(0, 1fr) 28px;
+
+    margin-top: -24px;
+    margin-bottom: 10px;
+  }
+
+  .aiStatusTicker__signal {
+    min-width: 82px;
+    gap: 5px;
+
+    padding-inline:
+      8px 9px;
+  }
+
+  .aiStatusTicker__signalText {
+    font-size: 7px;
+  }
+
+  .aiStatusTicker__summary {
+    display: none;
+  }
+
+  .aiStatusTicker__item {
+    height: 28px;
+    gap: 6px;
+
+    padding-inline:
+      9px;
+  }
+
+  .aiStatusTicker__item strong {
+    font-size: 8px;
+  }
+
+  .aiStatusTicker__state,
+  .aiStatusTicker__detail {
+    font-size: 7px;
+  }
+
+  .aiStatusTicker__detail {
+    max-width: 180px;
+  }
+
+  .aiStatusTicker__refresh {
+    width: 28px;
+    height: 28px;
+  }
+
+  .aiStatusTicker__loading {
+    height: 28px;
+  }
+
+  .aiStatusTicker__marquee {
+    animation-duration: 31s;
+  }
+}
+
+@media (max-width: 480px) {
+  .aiStatusTicker {
+    width:
+      calc(100vw - 28px);
+
+    grid-template-columns:
+      72px minmax(0, 1fr) 26px;
+  }
+
+  .aiStatusTicker__signal {
+    min-width: 0;
+  }
+
+  .aiStatusTicker__radar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .aiStatusTicker__item {
+    padding-inline:
+      8px;
+  }
+
+  .aiStatusTicker__detail {
+    max-width: 135px;
+  }
+
+  .aiStatusTicker__refresh {
+    width: 26px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aiStatusTicker__marquee {
+    width: 100%;
+
+    overflow-x: auto;
+
+    animation: none;
+  }
+
+  .aiStatusTicker__group[aria-hidden="true"] {
+    display: none;
+  }
+
+  .aiStatusTicker__radar::after,
+  .aiStatusTicker__item.is-problem
+  .aiStatusTicker__dot,
+  .aiStatusTicker.has-issue::before,
+  .aiStatusTicker.is-refreshing
+  .aiStatusTicker__refresh {
+    animation: none;
+  }
+}

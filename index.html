@@ -7,6 +7,7 @@
   <title>Mini AI Encyclopedia</title>
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="styles-xai.css" />
+  <link rel="stylesheet" href="/ai-status/ai-status.css" />
 </head>
 <body>
   <a class="skipLink" href="#changelogFeed">Skip to changelog</a>
@@ -33,6 +34,14 @@
       <div class="heroRobotPatrol" aria-label="Configured AI providers on patrol">
         <div id="patrolTrack" class="patrolTrack" aria-hidden="true"></div>
       </div>
+
+      <!-- Live AI status ticker sits directly below the patrol line. -->
+      <section
+        id="aiStatusTicker"
+        class="aiStatusTicker"
+        aria-label="Live status of AI providers"
+        aria-live="polite"
+      ></section>
 
       <h1 id="pageTitle" class="heroTitle">
         <span class="miniWord">Mini</span>
@@ -109,6 +118,7 @@
 
   <script src="ai-encyclopedia.config.js"></script>
   <script src="app.js"></script>
+  <script type="module" src="/ai-status/ai-status.js"></script>
   <script type="module" src="/mini-ai-chatbot/mini-ai-chatbot.js"></script>
 </body>
 </html>
