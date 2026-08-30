@@ -1,6 +1,9 @@
 export const XAI_PRODUCT_CHANGELOG_URL =
   "https://grok.com/release-notes";
 
+const EARLIEST_GROK_YEAR = 2023;
+const MAX_FUTURE_YEAR_OFFSET = 1;
+
 const MONTHS = {
   january: "01", jan: "01",
   february: "02", feb: "02",
@@ -18,6 +21,9 @@ const MONTHS = {
 
 const LONG_DATE_RE =
   /^(January|Jan|February|Feb|March|Mar|April|Apr|May|June|Jun|July|Jul|August|Aug|September|Sept?|October|Oct|November|Nov|December|Dec)\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i;
+
+const ISO_DATE_RE =
+  /^(\d{4})-(\d{2})-(\d{2})(?:[T\s](?:\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?(?:Z|[+-]\d{2}:?\d{2})?)?$/;
 
 const DATE_KEYS =
   /^(date|publishedAt|published_at|releaseDate|release_date|createdAt|created_at|updatedAt|updated_at)$/i;
@@ -68,15 +74,16 @@ export function parseXaiProductChangelog(html) {
   const entries = deduplicateEntries([
     ...parseVisibleSemanticHtml(html),
     ...parseEmbeddedJson(html),
-    ...parseNextFlightPayloads(html)
+    ...parseStructuredNextPayloads(html)
   ])
     .filter(isPlausibleRelease)
     .sort(sortEntries);
 
   if (!entries.length) {
     throw new Error(
-      "Grok release notes loaded, but no product release entries could be extracted. " +
-      "grok.com may have changed its client-side release-note payload."
+      "Grok release notes loaded, but no trustworthy product release entries " +
+      "could be extracted. The parser intentionally rejects ambiguous client " +
+      "configuration data rather than displaying fake release dates."
     );
   }
 
@@ -101,13 +108,11 @@ function parseVisibleSemanticHtml(html) {
       const summary = cleanSummary(summaryLines.join("\n"));
 
       if (summary) {
-        entries.push(
-          createEntry({
-            date: currentDate,
-            title: currentTitle,
-            summary
-          })
-        );
+        entries.push(createEntry({
+          date: currentDate,
+          title: currentTitle,
+          summary
+        }));
       }
     }
 
@@ -130,7 +135,7 @@ function parseVisibleSemanticHtml(html) {
 
     if (!text) continue;
 
-    const date = normaliseDate(text);
+    const date = normaliseReleaseDate(text);
 
     if (date) {
       flush();
@@ -139,7 +144,10 @@ function parseVisibleSemanticHtml(html) {
     }
 
     if (/^h[1-4]$/.test(tag)) {
-      if (/^release notes?$/i.test(text) || /^grok$/i.test(text)) {
+      if (
+        /^release notes?$/i.test(text) ||
+        /^grok$/i.test(text)
+      ) {
         continue;
       }
 
@@ -147,12 +155,17 @@ function parseVisibleSemanticHtml(html) {
         flush();
       }
 
-      currentTitle = text;
+      if (isPlausibleTitle(text)) {
+        currentTitle = text;
+      }
+
       continue;
     }
 
     if (currentDate && currentTitle) {
-      summaryLines.push(tag === "li" ? `• ${text}` : text);
+      summaryLines.push(
+        tag === "li" ? `• ${text}` : text
+      );
     }
   }
 
@@ -162,7 +175,8 @@ function parseVisibleSemanticHtml(html) {
 
 function parseEmbeddedJson(html) {
   const entries = [];
-  const scriptPattern = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+  const scriptPattern =
+    /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
 
   let match;
 
@@ -172,8 +186,11 @@ function parseEmbeddedJson(html) {
 
     if (!raw) continue;
 
-    const type = readAttribute(attrs, "type").toLowerCase();
-    const id = readAttribute(attrs, "id").toLowerCase();
+    const type =
+      readAttribute(attrs, "type").toLowerCase();
+
+    const id =
+      readAttribute(attrs, "id").toLowerCase();
 
     const looksJson =
       type.includes("json") ||
@@ -185,69 +202,93 @@ function parseEmbeddedJson(html) {
     const parsed = tryParseJson(raw);
 
     if (parsed !== null) {
-      walkJson(parsed, entries, new Set());
+      walkStructuredJson(
+        parsed,
+        entries,
+        new Set()
+      );
     }
   }
 
   return entries;
 }
 
-function parseNextFlightPayloads(html) {
+function parseStructuredNextPayloads(html) {
   const entries = [];
+
   const pattern =
     /<script\b[^>]*>([\s\S]*?self\.__next_f\.push[\s\S]*?)<\/script>/gi;
 
   let match;
 
   while ((match = pattern.exec(html))) {
-    const text = decodeCommonEscapes(match[1]);
+    const text =
+      decodeCommonEscapes(match[1]);
 
-    for (const candidate of extractJsonObjects(text)) {
-      const parsed = tryParseJson(candidate);
+    const candidates =
+      extractJsonObjects(text);
+
+    for (const candidate of candidates) {
+      const parsed =
+        tryParseJson(candidate);
 
       if (parsed !== null) {
-        walkJson(parsed, entries, new Set());
+        walkStructuredJson(
+          parsed,
+          entries,
+          new Set()
+        );
       }
     }
-
-    entries.push(...extractDateTitleSummaryTriples(text));
   }
 
   return entries;
 }
 
-function walkJson(value, entries, visited) {
-  if (value === null || value === undefined) return;
-
-  if (typeof value === "string") {
-    if (
-      value.length > 30 &&
-      /(grok|release|feature|what'?s new)/i.test(value)
-    ) {
-      entries.push(...extractDateTitleSummaryTriples(value));
-    }
-
+function walkStructuredJson(
+  value,
+  entries,
+  visited
+) {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value !== "object"
+  ) {
     return;
   }
 
-  if (typeof value !== "object") return;
-  if (visited.has(value)) return;
+  if (visited.has(value)) {
+    return;
+  }
 
   visited.add(value);
 
   if (Array.isArray(value)) {
-    value.forEach((item) => walkJson(item, entries, visited));
+    value.forEach((item) =>
+      walkStructuredJson(
+        item,
+        entries,
+        visited
+      )
+    );
+
     return;
   }
 
-  const objectEntry = releaseEntryFromObject(value);
+  const objectEntry =
+    releaseEntryFromObject(value);
 
   if (objectEntry) {
     entries.push(objectEntry);
   }
 
   Object.values(value).forEach((child) =>
-    walkJson(child, entries, visited)
+    walkStructuredJson(
+      child,
+      entries,
+      visited
+    )
   );
 }
 
@@ -257,105 +298,60 @@ function releaseEntryFromObject(object) {
   let summaryValue = "";
 
   for (const [key, value] of Object.entries(object)) {
-    if (DATE_KEYS.test(key) && typeof value === "string") {
+    if (
+      DATE_KEYS.test(key) &&
+      typeof value === "string"
+    ) {
       dateValue = value;
       continue;
     }
 
-    if (TITLE_KEYS.test(key) && typeof value === "string") {
+    if (
+      TITLE_KEYS.test(key) &&
+      typeof value === "string"
+    ) {
       titleValue = value;
       continue;
     }
 
     if (SUMMARY_KEYS.test(key)) {
-      summaryValue = extractTextValue(value);
+      summaryValue =
+        extractTextValue(value);
     }
   }
 
-  const date = normaliseDate(dateValue);
-  const title = cleanText(titleValue);
-  const summary = cleanSummary(summaryValue);
+  const date =
+    normaliseReleaseDate(dateValue);
 
-  if (!date || !title || !summary) {
+  const title =
+    cleanText(titleValue);
+
+  const summary =
+    cleanSummary(summaryValue);
+
+  if (
+    !date ||
+    !isPlausibleTitle(title) ||
+    !summary
+  ) {
     return null;
   }
 
-  return createEntry({ date, title, summary });
+  return createEntry({
+    date,
+    title,
+    summary
+  });
 }
 
-function extractDateTitleSummaryTriples(value) {
-  const text = decodeCommonEscapes(value)
-    .replace(/<[^>]+>/g, "\n")
-    .replace(/[{}[\]",]/g, "\n");
-
-  const lines = text
-    .split(/\n+/)
-    .map(cleanText)
-    .filter(Boolean);
-
-  const entries = [];
-  let currentDate = "";
-  let currentTitle = "";
-  let summary = [];
-
-  function flush() {
-    if (currentDate && currentTitle && summary.length) {
-      const clean = cleanSummary(summary.join(" "));
-
-      if (clean) {
-        entries.push(
-          createEntry({
-            date: currentDate,
-            title: currentTitle,
-            summary: clean
-          })
-        );
-      }
-    }
-
-    currentTitle = "";
-    summary = [];
-  }
-
-  for (const line of lines) {
-    const date = normaliseDate(line);
-
-    if (date) {
-      flush();
-      currentDate = date;
-      continue;
-    }
-
-    if (!currentDate) continue;
-
-    if (!currentTitle) {
-      if (
-        line.length >= 3 &&
-        line.length <= 150 &&
-        !/^release notes?$/i.test(line)
-      ) {
-        currentTitle = line;
-      }
-
-      continue;
-    }
-
-    if (line.length >= 5) {
-      summary.push(line);
-    }
-
-    if (summary.join(" ").length >= 1000) {
-      flush();
-    }
-  }
-
-  flush();
-  return entries;
-}
-
-function createEntry({ date, title, summary }) {
+function createEntry({
+  date,
+  title,
+  summary
+}) {
   return {
-    id: `xai-product-${date}-${slugify(title)}`,
+    id:
+      `xai-product-${date}-${slugify(title)}`,
     providerId: "xai",
     providerName: "xAI",
     product: "Grok",
@@ -364,24 +360,166 @@ function createEntry({ date, title, summary }) {
     date,
     datePrecision: "day",
     summary: cleanSummary(summary),
-    tags: classifyProductTags(title, summary),
-    sourceUrl: XAI_PRODUCT_CHANGELOG_URL
+    tags:
+      classifyProductTags(
+        title,
+        summary
+      ),
+    sourceUrl:
+      XAI_PRODUCT_CHANGELOG_URL
   };
 }
 
-function classifyProductTags(title, summary) {
-  const text = `${title} ${summary}`.toLowerCase();
-  const tags = new Set();
+function normaliseReleaseDate(value) {
+  const text = cleanText(value);
 
-  if (/new|introduc|launch|available|rolling out|release/.test(text)) {
+  if (!text) {
+    return "";
+  }
+
+  const iso =
+    text.match(ISO_DATE_RE);
+
+  if (iso) {
+    const year = Number(iso[1]);
+    const month = Number(iso[2]);
+    const day = Number(iso[3]);
+
+    if (
+      !isAllowedYear(year) ||
+      !isValidMonthDay(month, day)
+    ) {
+      return "";
+    }
+
+    return (
+      `${year}-` +
+      `${String(month).padStart(2, "0")}-` +
+      `${String(day).padStart(2, "0")}`
+    );
+  }
+
+  const longDate =
+    text.match(LONG_DATE_RE);
+
+  if (!longDate) {
+    // Deliberately DO NOT call Date.parse() here.
+    // Grok's client payload contains many arbitrary strings/numbers
+    // which JavaScript can incorrectly interpret as dates.
+    return "";
+  }
+
+  const year =
+    Number(longDate[3]);
+
+  const month =
+    Number(
+      MONTHS[
+        longDate[1].toLowerCase()
+      ]
+    );
+
+  const day =
+    Number(longDate[2]);
+
+  if (
+    !isAllowedYear(year) ||
+    !isValidMonthDay(month, day)
+  ) {
+    return "";
+  }
+
+  return (
+    `${year}-` +
+    `${String(month).padStart(2, "0")}-` +
+    `${String(day).padStart(2, "0")}`
+  );
+}
+
+function isAllowedYear(year) {
+  const maxYear =
+    new Date().getUTCFullYear() +
+    MAX_FUTURE_YEAR_OFFSET;
+
+  return (
+    Number.isInteger(year) &&
+    year >= EARLIEST_GROK_YEAR &&
+    year <= maxYear
+  );
+}
+
+function isValidMonthDay(
+  month,
+  day
+) {
+  return (
+    Number.isInteger(month) &&
+    Number.isInteger(day) &&
+    month >= 1 &&
+    month <= 12 &&
+    day >= 1 &&
+    day <= 31
+  );
+}
+
+function isPlausibleTitle(value) {
+  const title =
+    cleanText(value);
+
+  if (
+    title.length < 4 ||
+    title.length > 180
+  ) {
+    return false;
+  }
+
+  // Reject internal/client identifiers seen in Grok's payload:
+  // backend_detection, extra_suggestions, etc.
+  if (
+    /^[a-z0-9]+(?:_[a-z0-9]+)+:?$/i.test(title)
+  ) {
+    return false;
+  }
+
+  // Reject tiny config keys such as "a8:".
+  if (
+    /^[a-z]\d{1,3}:?$/i.test(title)
+  ) {
+    return false;
+  }
+
+  const letters =
+    title.match(/[a-z]/gi) || [];
+
+  return letters.length >= 4;
+}
+
+function classifyProductTags(
+  title,
+  summary
+) {
+  const text =
+    `${title} ${summary}`
+      .toLowerCase();
+
+  const tags =
+    new Set();
+
+  if (
+    /new|introduc|launch|available|rolling out|release/.test(text)
+  ) {
     tags.add("New feature");
   }
 
-  if (/grok\s*\d|model|reasoning|thinking|context window/.test(text)) {
+  if (
+    /grok\s*\d|model|reasoning|thinking|context window/.test(text)
+  ) {
     tags.add("Model update");
   }
 
-  if (/improv|faster|better|enhanc|upgrade|performance/.test(text)) {
+  if (
+    /improv|faster|better|enhanc|upgrade|performance/.test(text)
+  ) {
     tags.add("Improvement");
   }
 
@@ -389,15 +527,21 @@ function classifyProductTags(title, summary) {
     tags.add("Fixed");
   }
 
-  if (/deprecat|retir|removed|sunset/.test(text)) {
+  if (
+    /deprecat|retir|removed|sunset/.test(text)
+  ) {
     tags.add("Deprecated");
   }
 
-  if (/price|pricing|plan|subscription/.test(text)) {
+  if (
+    /price|pricing|plan|subscription/.test(text)
+  ) {
     tags.add("Pricing");
   }
 
-  if (/safe|safety|security|privacy/.test(text)) {
+  if (
+    /safe|safety|security|privacy/.test(text)
+  ) {
     tags.add("Safety");
   }
 
@@ -414,10 +558,8 @@ function isPlausibleRelease(entry) {
     entry.providerId === "xai" &&
     entry.audience === "product" &&
     entry.date &&
-    entry.title &&
+    isPlausibleTitle(entry.title) &&
     entry.summary &&
-    entry.title.length >= 3 &&
-    entry.title.length <= 180 &&
     entry.summary.length >= 8
   );
 }
@@ -430,7 +572,10 @@ function deduplicateEntries(entries) {
 
     const key = [
       entry.date,
-      entry.title.toLowerCase().replace(/\s+/g, " ").trim()
+      entry.title
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim()
     ].join("|");
 
     if (!map.has(key)) {
@@ -438,18 +583,30 @@ function deduplicateEntries(entries) {
       continue;
     }
 
-    const existing = map.get(key);
+    const existing =
+      map.get(key);
 
-    if (entry.summary.length > existing.summary.length) {
-      existing.summary = entry.summary;
+    if (
+      entry.summary.length >
+      existing.summary.length
+    ) {
+      existing.summary =
+        entry.summary;
     }
 
-    existing.tags = Array.from(
-      new Set(existing.tags.concat(entry.tags))
-    );
+    existing.tags =
+      Array.from(
+        new Set(
+          existing.tags.concat(
+            entry.tags
+          )
+        )
+      );
   }
 
-  return Array.from(map.values());
+  return Array.from(
+    map.values()
+  );
 }
 
 function sortEntries(a, b) {
@@ -460,60 +617,40 @@ function sortEntries(a, b) {
   return a.title.localeCompare(b.title);
 }
 
-function normaliseDate(value) {
-  const text = cleanText(value);
-
-  if (!text) return "";
-
-  const iso =
-    text.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
-
-  if (iso) {
-    return `${iso[1]}-${iso[2]}-${iso[3]}`;
-  }
-
-  const longDate = text.match(LONG_DATE_RE);
-
-  if (longDate) {
-    const month = MONTHS[longDate[1].toLowerCase()];
-
-    return (
-      `${longDate[3]}-${month}-` +
-      `${String(Number(longDate[2])).padStart(2, "0")}`
+function readAttribute(
+  attrs,
+  name
+) {
+  const escaped =
+    name.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
     );
-  }
 
-  const parsed = Date.parse(text);
+  const re =
+    new RegExp(
+      `${escaped}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
+      "i"
+    );
 
-  if (!Number.isFinite(parsed)) {
-    return "";
-  }
-
-  const date = new Date(parsed);
-
-  return [
-    date.getUTCFullYear(),
-    String(date.getUTCMonth() + 1).padStart(2, "0"),
-    String(date.getUTCDate()).padStart(2, "0")
-  ].join("-");
-}
-
-function readAttribute(attrs, name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const re = new RegExp(
-    `${escaped}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`,
-    "i"
-  );
-
-  const match = String(attrs || "").match(re);
+  const match =
+    String(attrs || "")
+      .match(re);
 
   return match
-    ? (match[1] ?? match[2] ?? match[3] ?? "")
+    ? (
+      match[1] ??
+      match[2] ??
+      match[3] ??
+      ""
+    )
     : "";
 }
 
 function extractTextValue(value) {
-  if (typeof value === "string") return value;
+  if (typeof value === "string") {
+    return value;
+  }
 
   if (Array.isArray(value)) {
     return value
@@ -522,7 +659,10 @@ function extractTextValue(value) {
       .join("\n");
   }
 
-  if (value && typeof value === "object") {
+  if (
+    value &&
+    typeof value === "object"
+  ) {
     return Object.values(value)
       .map(extractTextValue)
       .filter(Boolean)
@@ -549,7 +689,8 @@ function cleanSummary(value) {
 
 function cleanText(value) {
   return decodeEntities(
-    String(value || "").replace(/<[^>]+>/g, " ")
+    String(value || "")
+      .replace(/<[^>]+>/g, " ")
   )
     .replace(/\\n/g, " ")
     .replace(/\s+/g, " ")
@@ -576,13 +717,19 @@ function tryParseJson(value) {
 
 function extractJsonObjects(text) {
   const candidates = [];
+
   let depth = 0;
   let start = -1;
   let quote = "";
   let escaped = false;
 
-  for (let index = 0; index < text.length; index += 1) {
-    const char = text[index];
+  for (
+    let index = 0;
+    index < text.length;
+    index += 1
+  ) {
+    const char =
+      text[index];
 
     if (quote) {
       if (escaped) {
@@ -602,22 +749,43 @@ function extractJsonObjects(text) {
       continue;
     }
 
-    if (char === '"' || char === "'") {
+    if (
+      char === '"' ||
+      char === "'"
+    ) {
       quote = char;
       continue;
     }
 
-    if (char === "{" || char === "[") {
-      if (depth === 0) start = index;
+    if (
+      char === "{" ||
+      char === "["
+    ) {
+      if (depth === 0) {
+        start = index;
+      }
+
       depth += 1;
       continue;
     }
 
-    if (char === "}" || char === "]") {
+    if (
+      char === "}" ||
+      char === "]"
+    ) {
       depth -= 1;
 
-      if (depth === 0 && start >= 0) {
-        candidates.push(text.slice(start, index + 1));
+      if (
+        depth === 0 &&
+        start >= 0
+      ) {
+        candidates.push(
+          text.slice(
+            start,
+            index + 1
+          )
+        );
+
         start = -1;
       }
     }
@@ -643,5 +811,6 @@ function slugify(value) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-    .slice(0, 72) || "release";
+    .slice(0, 72) ||
+    "release";
 }
