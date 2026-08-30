@@ -1,97 +1,72 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-
 import {
-  parseXaiProductChangelog
+  parseXaiProductJson,
+  parseXaiProductMarkdown,
+  parseXaiProductHtml
 } from "../scripts/sources/fetch-xai.js";
 
-test("parses valid visible Grok release notes", () => {
+test("JSON mirror keeps release-note entries only", () => {
+  const raw = JSON.stringify({
+    releases: [
+      {
+        date: "2026-07-16",
+        title: "Automations run on schedule or email triggers",
+        summary: "Release Notes. Automations run user-defined instructions on a schedule.",
+        sourceUrl: "https://grok.com/release-notes"
+      },
+      {
+        date: "2026-06-27",
+        title: "Grok - AI Chat & Video v1.3.95",
+        summary: "Available for iOS",
+        sourceUrl: "https://apps.apple.com/app/grok"
+      }
+    ]
+  });
+
+  const items = parseXaiProductJson(raw);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].date, "2026-07-16");
+});
+
+test("Markdown mirror extracts release notes", () => {
+  const markdown = `
+# Grok
+Jul 16, 2026
+## Automations run on schedule or email triggers
+Release Notes
+Automations run user-defined instructions on a schedule or when matching emails arrive.
+Read more →
+Jul 1, 2026
+## iOS dictation shortcut launched
+Release Notes
+Grok iOS adds a Dictate to Grok shortcut.
+Read more →
+`;
+
+  const items = parseXaiProductMarkdown(markdown);
+  assert.equal(items.length, 2);
+});
+
+test("HTML mirror excludes App Store cards", () => {
   const html = `
     <main>
-      <h1>Release Notes</h1>
-
-      <h2>August 28, 2026</h2>
-      <h3>Voice mode gets faster</h3>
-      <p>Voice mode now responds with lower latency.</p>
-
-      <h2>August 20, 2026</h2>
-      <h3>New Grok experience</h3>
-      <p>A new experience is rolling out to Grok users.</p>
+      <div>Jul 16, 2026</div>
+      <section>
+        <h2>Automations run on schedule or email triggers</h2>
+        <div>Release Notes</div>
+        <p>Automations can run on schedules and email triggers.</p>
+        <a href="https://grok.com/release-notes">Read more →</a>
+      </section>
+      <div>Jun 27, 2026</div>
+      <section>
+        <h2>Grok - AI Chat & Video v1.3.95</h2>
+        <p>Available for iOS</p>
+      </section>
     </main>
   `;
 
-  const entries =
-    parseXaiProductChangelog(html);
-
-  assert.equal(entries.length, 2);
-  assert.equal(entries[0].date, "2026-08-28");
-  assert.equal(entries[0].title, "Voice mode gets faster");
-});
-
-test("accepts structured ISO release objects", () => {
-  const html = `
-    <script type="application/json">
-      {
-        "releaseNotes": [
-          {
-            "releaseDate": "2026-08-18",
-            "title": "Grok adds workspace mode",
-            "summary": "Workspace mode is now available to users."
-          },
-          {
-            "publishedAt": "2026-08-10T09:00:00Z",
-            "headline": "Grok improves search",
-            "description": "Search now returns better results."
-          }
-        ]
-      }
-    </script>
-  `;
-
-  const entries =
-    parseXaiProductChangelog(html);
-
-  assert.equal(entries.length, 2);
-  assert.equal(entries[0].date, "2026-08-18");
-  assert.equal(entries[1].date, "2026-08-10");
-});
-
-test("rejects bogus JavaScript date interpretations", () => {
-  const html = `
-    <script type="application/json">
-      {
-        "config": [
-          {
-            "date": "29999",
-            "title": "backend_detection",
-            "description": "Internal client configuration."
-          },
-          {
-            "date": "11999",
-            "title": "extra_suggestions",
-            "description": "Internal client configuration."
-          },
-          {
-            "date": "9999",
-            "title": "a8:",
-            "description": "Internal key."
-          }
-        ],
-        "releaseNotes": [
-          {
-            "releaseDate": "2026-08-29",
-            "title": "Real Grok release",
-            "summary": "A real product update for Grok."
-          }
-        ]
-      }
-    </script>
-  `;
-
-  const entries =
-    parseXaiProductChangelog(html);
-
-  assert.equal(entries.length, 1);
-  assert.equal(entries[0].date, "2026-08-29");
-  assert.equal(entries[0].title, "Real Grok release");
+  const items = parseXaiProductHtml(html);
+  assert.equal(items.length, 1);
+  assert.equal(items[0].date, "2026-07-16");
 });

@@ -6,10 +6,7 @@ import {
 export default async function handler(request, response) {
   if (request.method !== "GET") {
     response.setHeader("Allow", "GET");
-
-    return response.status(405).json({
-      error: "Method not allowed"
-    });
+    return response.status(405).json({ error: "Method not allowed" });
   }
 
   try {
@@ -29,7 +26,7 @@ export default async function handler(request, response) {
       items
     });
   } catch (error) {
-    console.error("xAI developer release-notes adapter failed:", error);
+    console.error("xAI developer changelog adapter failed:", error);
     response.setHeader("Cache-Control", "no-store");
 
     return response.status(502).json({
@@ -41,7 +38,7 @@ export default async function handler(request, response) {
       error:
         error instanceof Error
           ? error.message
-          : "xAI developer release notes could not be loaded."
+          : "xAI developer changelog could not be loaded."
     });
   }
 }
