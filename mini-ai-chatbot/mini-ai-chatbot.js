@@ -1,6 +1,7 @@
 import { MINI_AI_CHATBOT_CONFIG } from "./config.js";
 import { createMiniAiBot } from "./bot-art.js";
-import { PixelRebuild } from "./pixel-rebuild.js";
+import { TimedSpeechBubble } from "./speech-bubble.js";
+import { DockReveal } from "./dock-reveal.js";
 import { MiniAiChatPanel } from "./chat-panel.js";
 
 const MODULE_URL = new URL(import.meta.url);
@@ -14,18 +15,26 @@ function boot() {
   const panel = new MiniAiChatPanel(MINI_AI_CHATBOT_CONFIG);
 
   const floating = createMiniAiBot({
-    label: "Open Mini AI Encyclopedia chatbot",
-    helperText: MINI_AI_CHATBOT_CONFIG.helperBubbleText
+    label: "Open Mini AI Encyclopedia chatbot"
   });
 
   document.body.appendChild(floating.root);
-  floating.root.addEventListener("click", () => panel.toggle());
+
+  const floatingBubble = makeSpeechBubbleController(floating);
+  floatingBubble.start();
+
+  floating.root.addEventListener("click", () => {
+    floatingBubble.setAllowed(false);
+    panel.toggle();
+  });
 
   const dockCompanion = createDockCompanion(panel);
 
   monitorProviderDock({
-    floatingRoot: floating.root,
-    dockCompanion
+    floating,
+    floatingBubble,
+    dockCompanion,
+    panel
   });
 }
 
@@ -40,36 +49,60 @@ function injectCss() {
   document.head.appendChild(link);
 }
 
+function makeSpeechBubbleController(bot) {
+  return new TimedSpeechBubble({
+    bubble: bot.bubble,
+    textNode: bot.bubbleText,
+    caretNode: bot.bubbleCaret,
+    text: MINI_AI_CHATBOT_CONFIG.helperBubbleText,
+    initialDelayMs: MINI_AI_CHATBOT_CONFIG.helperBubbleInitialDelayMs,
+    repeatMs: MINI_AI_CHATBOT_CONFIG.helperBubbleRepeatMs,
+    typeSpeedMs: MINI_AI_CHATBOT_CONFIG.helperBubbleTypeSpeedMs,
+    holdMs: MINI_AI_CHATBOT_CONFIG.helperBubbleHoldMs,
+    hideMs: MINI_AI_CHATBOT_CONFIG.helperBubbleHideMs
+  });
+}
+
 function createDockCompanion(panel) {
   const companion = document.createElement("div");
   companion.className = "mai-dock-companion";
   companion.setAttribute("aria-hidden", "true");
 
-  const pixelBot = createMiniAiBot({
-    pixel: true,
-    label: "Open Mini AI Encyclopedia chatbot",
-    helperText: MINI_AI_CHATBOT_CONFIG.helperBubbleText
+  const dockBot = createMiniAiBot({
+    dock: true,
+    label: "Open Mini AI Encyclopedia chatbot"
   });
 
-  companion.appendChild(pixelBot.root);
+  companion.appendChild(dockBot.root);
   document.body.appendChild(companion);
 
-  const rebuild = new PixelRebuild(pixelBot.grid, {
-    buildDurationMs: MINI_AI_CHATBOT_CONFIG.pixelBuildDurationMs,
-    disassembleDurationMs: MINI_AI_CHATBOT_CONFIG.pixelDisassembleDurationMs
+  const reveal = new DockReveal(dockBot.root, {
+    buildDurationMs: MINI_AI_CHATBOT_CONFIG.dockBuildDurationMs,
+    disassembleDurationMs: MINI_AI_CHATBOT_CONFIG.dockDisassembleDurationMs
   });
 
-  pixelBot.root.addEventListener("click", () => panel.toggle());
+  const bubble = makeSpeechBubbleController(dockBot);
+
+  dockBot.root.addEventListener("click", () => {
+    bubble.setAllowed(false);
+    panel.toggle();
+  });
 
   return {
     root: companion,
-    button: pixelBot.root,
-    rebuild,
+    button: dockBot.root,
+    reveal,
+    bubble,
     active: false
   };
 }
 
-function monitorProviderDock({ floatingRoot, dockCompanion }) {
+function monitorProviderDock({
+  floating,
+  floatingBubble,
+  dockCompanion,
+  panel
+}) {
   let dock = document.querySelector(MINI_AI_CHATBOT_CONFIG.dockSelector);
   let lastVisible = false;
   let mutationObserver = null;
@@ -102,26 +135,48 @@ function monitorProviderDock({ floatingRoot, dockCompanion }) {
     const visible = isDockVisible(dock);
 
     if (visible) {
-      positionCompanionAboveDock(dockCompanion.root, dock);
+      positionCompanionAtDockRight(dockCompanion.root, dock);
 
       dockCompanion.root.classList.add("is-visible");
       dockCompanion.root.setAttribute("aria-hidden", "false");
-      floatingRoot.classList.add("is-docked");
+
+      floating.root.classList.add("is-docked");
+      floatingBubble.setAllowed(false);
 
       if (!lastVisible) {
         dockCompanion.active = true;
-        await dockCompanion.rebuild.build();
+        dockCompanion.bubble.setAllowed(true);
+        dockCompanion.bubble.start();
+        await dockCompanion.reveal.build();
       }
     } else {
-      floatingRoot.classList.remove("is-docked");
+      floating.root.classList.remove("is-docked");
+
+      floatingBubble.setAllowed(true);
+
+      if (!lastVisible) {
+        // If we loaded at the top, leave its original timer alone.
+      } else {
+        floatingBubble.start();
+      }
 
       if (lastVisible || dockCompanion.active) {
         dockCompanion.active = false;
-        await dockCompanion.rebuild.disassemble();
+        dockCompanion.bubble.setAllowed(false);
+        dockCompanion.bubble.stop();
+        await dockCompanion.reveal.disassemble();
       }
 
       dockCompanion.root.classList.remove("is-visible");
       dockCompanion.root.setAttribute("aria-hidden", "true");
+    }
+
+    if (!panel.root.classList.contains("is-open")) {
+      if (visible) {
+        dockCompanion.bubble.setAllowed(true);
+      } else {
+        floatingBubble.setAllowed(true);
+      }
     }
 
     lastVisible = visible;
@@ -156,23 +211,41 @@ function isDockVisible(dock) {
   if (dock.getAttribute("aria-hidden") === "true") return false;
 
   const style = getComputedStyle(dock);
-  if (style.display === "none" || style.visibility === "hidden") return false;
+
+  if (style.display === "none" || style.visibility === "hidden") {
+    return false;
+  }
 
   const rect = dock.getBoundingClientRect();
 
-  return rect.width > 20 && rect.height > 20 && rect.bottom > 0 && rect.top < window.innerHeight;
+  return (
+    rect.width > 20 &&
+    rect.height > 20 &&
+    rect.bottom > 0 &&
+    rect.top < window.innerHeight
+  );
 }
 
-function positionCompanionAboveDock(companion, dock) {
+function positionCompanionAtDockRight(companion, dock) {
   const rect = dock.getBoundingClientRect();
-  const width = companion.offsetWidth || 116;
-  const height = companion.offsetHeight || 96;
-  const inset = 8;
 
-  // User requested the dock companion to sit at the end-right and fit the screen.
-  const preferredLeft = rect.right - width - 10;
-  const left = clamp(preferredLeft, inset, window.innerWidth - width - inset);
-  const top = Math.max(inset, rect.top - height - MINI_AI_CHATBOT_CONFIG.dockGapPx);
+  const width = companion.offsetWidth || 92;
+  const height = companion.offsetHeight || 80;
+  const edge = window.innerWidth <= 720 ? 6 : 10;
+
+  // Right aligned with the visible provider dock, clamped inside viewport.
+  const preferredLeft = rect.right - width - edge;
+
+  const left = clamp(
+    preferredLeft,
+    edge,
+    window.innerWidth - width - edge
+  );
+
+  const top = Math.max(
+    edge,
+    rect.top - height - MINI_AI_CHATBOT_CONFIG.dockGapPx
+  );
 
   companion.style.left = `${Math.round(left)}px`;
   companion.style.top = `${Math.round(top)}px`;

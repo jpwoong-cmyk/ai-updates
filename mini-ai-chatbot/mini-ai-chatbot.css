@@ -1,83 +1,120 @@
 /*
-  Mini AI Encyclopedia chatbot add-on.
-  All selectors are prefixed with mai- to avoid touching existing site CSS.
+  Mini AI Encyclopedia Chatbot v3
+  Entirely modular. All selectors are mai-*.
 */
 
 :root {
   --mai-bg: rgba(6, 10, 22, 0.92);
-  --mai-bg-strong: #070b16;
   --mai-line: rgba(166, 188, 255, 0.18);
   --mai-text: #f6f8ff;
   --mai-muted: #98a4ba;
+
   --mai-mint: #57e0b6;
   --mai-blue: #829cff;
   --mai-gold: #ffd15c;
-  --mai-danger: #ff6f8f;
+  --mai-coral: #ff8a5b;
 }
 
-/* -----------------------------------------------------------
-   Comic bubble
------------------------------------------------------------ */
+/* ==========================================================
+   TIMED COMIC BUBBLE
+   Hidden by default. JS reveals it once per minute.
+========================================================== */
 
 .mai-comic-bubble {
   position: absolute;
-  right: 100%;
-  top: -6px;
-  margin-right: 10px;
-  z-index: 2;
+  z-index: 7;
+  right: calc(100% + 10px);
+  top: -10px;
+
   display: inline-flex;
-  max-width: 140px;
+  min-width: 106px;
+  max-width: 150px;
+  min-height: 38px;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px;
-  border: 2px solid rgba(235, 242, 255, 0.95);
-  border-radius: 18px;
+
+  padding: 8px 11px;
+
+  border: 2px solid #edf3ff;
+  border-radius: 18px 18px 6px 18px;
+
   background: #ffffff;
+  color: #07101c;
+
   box-shadow:
-    0 10px 18px rgba(0, 0, 0, 0.22),
-    0 0 0 2px rgba(10, 16, 29, 0.12);
+    0 12px 22px rgba(0, 0, 0, 0.24),
+    0 0 0 2px rgba(6, 12, 26, 0.08);
+
+  opacity: 0;
+  transform: translateY(6px) scale(0.86) rotate(-2deg);
   transform-origin: right bottom;
+
+  pointer-events: none;
 }
 
-.mai-comic-bubble::after,
 .mai-comic-bubble::before {
   content: "";
   position: absolute;
-  top: 70%;
-  left: calc(100% - 1px);
-  width: 0;
-  height: 0;
-  border-style: solid;
-}
+  right: -10px;
+  bottom: 6px;
 
-.mai-comic-bubble::before {
-  border-width: 10px 0 10px 13px;
-  border-color: transparent transparent transparent rgba(235, 242, 255, 0.95);
-  transform: translateY(-50%);
+  width: 17px;
+  height: 15px;
+
+  background: #fff;
+  clip-path: polygon(0 0, 100% 54%, 0 100%);
 }
 
 .mai-comic-bubble::after {
-  left: calc(100% - 3px);
-  border-width: 8px 0 8px 11px;
-  border-color: transparent transparent transparent #ffffff;
-  transform: translateY(-50%);
+  content: "";
+  position: absolute;
+  right: -13px;
+  bottom: 4px;
+
+  width: 19px;
+  height: 19px;
+
+  border-right: 2px solid #edf3ff;
+  border-bottom: 2px solid #edf3ff;
+
+  transform: rotate(-34deg);
+  clip-path: polygon(42% 20%, 100% 100%, 0 100%);
+  opacity: 0.9;
+}
+
+.mai-comic-bubble.is-showing {
+  animation: mai-bubble-pop 320ms cubic-bezier(.16, 1.1, .3, 1) forwards;
+}
+
+.mai-comic-bubble.is-hiding {
+  animation: mai-bubble-away 260ms ease forwards;
 }
 
 .mai-comic-bubble__text {
-  color: #07101c;
-  font: 900 12px/1.05 "Segoe UI", ui-sans-serif, system-ui, sans-serif;
+  font: 900 12px/1.1 "Segoe UI", ui-sans-serif, system-ui, sans-serif;
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
 
-.mai-floating-launcher:hover .mai-comic-bubble,
-.mai-pixel-launcher:hover .mai-comic-bubble {
-  animation: mai-bubble-wobble 680ms ease;
+.mai-comic-bubble__caret {
+  display: inline-block;
+  width: 2px;
+  height: 14px;
+  margin-left: 2px;
+  border-radius: 999px;
+  background: #111827;
+  opacity: 0;
 }
 
-/* -----------------------------------------------------------
-   Floating launcher
------------------------------------------------------------ */
+.mai-comic-bubble__caret.is-typing {
+  opacity: 1;
+  animation: mai-caret-blink 520ms steps(1) infinite;
+}
+
+
+/* ==========================================================
+   FLOATING BOT
+========================================================== */
 
 .mai-floating-launcher {
   position: fixed;
@@ -91,11 +128,12 @@
   place-items: center;
 
   padding: 0;
+
   border: 1px solid rgba(144, 166, 255, 0.25);
   border-radius: 50%;
 
   background:
-    radial-gradient(circle at 30% 20%, rgba(91, 231, 186, 0.16), transparent 38%),
+    radial-gradient(circle at 28% 20%, rgba(91, 231, 186, 0.16), transparent 38%),
     radial-gradient(circle at 72% 72%, rgba(114, 137, 255, 0.18), transparent 44%),
     rgba(7, 10, 20, 0.88);
 
@@ -107,7 +145,6 @@
     0 0 28px rgba(93, 126, 255, 0.18);
 
   backdrop-filter: blur(14px);
-
   cursor: pointer;
 
   transition:
@@ -127,10 +164,6 @@
   transform: translateY(18px) scale(0.88);
 }
 
-/* -----------------------------------------------------------
-   CSS robot inspired by the AI robot inside the title
------------------------------------------------------------ */
-
 .mai-bot {
   position: relative;
   display: block;
@@ -140,7 +173,7 @@
 
 .mai-bot__aura {
   position: absolute;
-  inset: 12px 10px 10px 10px;
+  inset: 12px 10px 10px;
   border-radius: 16px;
   background:
     radial-gradient(circle at 35% 40%, rgba(87, 224, 182, 0.22), transparent 34%),
@@ -152,13 +185,18 @@
   position: absolute;
   top: 15px;
   left: 7px;
+
   width: 46px;
   height: 37px;
+
   overflow: hidden;
+
   border: 2px solid rgba(229, 236, 255, 0.82);
   border-radius: 13px;
+
   background:
     linear-gradient(135deg, rgba(24, 31, 54, 0.92), rgba(7, 11, 22, 0.98));
+
   box-shadow:
     0 0 0 2px rgba(129, 152, 255, 0.08),
     0 0 18px rgba(106, 138, 255, 0.25),
@@ -178,10 +216,13 @@
   position: absolute;
   top: -3px;
   left: 50%;
+
   width: 8px;
   height: 8px;
+
   border-radius: 50%;
   background: var(--mai-gold);
+
   box-shadow: 0 0 10px rgba(255, 209, 92, 0.85);
   transform: translateX(-50%);
 }
@@ -189,8 +230,10 @@
 .mai-bot__ear {
   position: absolute;
   top: 27px;
+
   width: 7px;
   height: 17px;
+
   border: 2px solid rgba(225, 233, 255, 0.74);
   background: #080c18;
 }
@@ -208,31 +251,45 @@
 .mai-bot__ai {
   position: absolute;
   inset: 0;
+
   display: grid;
   place-items: center;
+
   font: 900 20px/1 "Segoe UI", system-ui, sans-serif;
-  background: linear-gradient(135deg, #ff8f52 8%, #ffd15c 34%, #71df9c 56%, #779cff 82%);
+
+  background: linear-gradient(
+    135deg,
+    #ff8f52 8%,
+    #ffd15c 34%,
+    #71df9c 56%,
+    #779cff 82%
+  );
+
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+
   opacity: 0.32;
-  transform: translateY(-1px);
 }
 
 .mai-bot__eyes {
   position: absolute;
   top: 14px;
   left: 50%;
+
   display: flex;
   gap: 13px;
+
   transform: translateX(-50%);
 }
 
 .mai-bot__eyes span {
   width: 5px;
   height: 5px;
+
   border-radius: 50%;
   background: #7e9fff;
+
   box-shadow: 0 0 7px rgba(126, 159, 255, 0.85);
 }
 
@@ -240,194 +297,473 @@
   position: absolute;
   left: 50%;
   bottom: 8px;
+
   width: 14px;
   height: 6px;
+
   border-bottom: 2px solid var(--mai-mint);
   border-radius: 0 0 12px 12px;
+
   transform: translateX(-50%);
-  box-shadow: 0 4px 8px rgba(87, 224, 182, 0.22);
 }
 
-/* -----------------------------------------------------------
-   Dock companion: smaller, on the right, more "AI" dot matrix
------------------------------------------------------------ */
+
+/* ==========================================================
+   DOCK COMPANION
+   Matching the site's provider-orb visual language.
+========================================================== */
 
 .mai-dock-companion {
   position: fixed;
   z-index: 870;
-  width: 118px;
-  height: 94px;
+
+  width: 96px;
+  height: 84px;
+
   display: grid;
   place-items: center;
+
   opacity: 0;
   pointer-events: none;
-  transform: translateY(8px);
-  transition: opacity 260ms ease, transform 320ms ease;
+
+  transform: translateY(8px) scale(0.96);
+
+  transition:
+    opacity 240ms ease,
+    transform 300ms ease;
 }
 
 .mai-dock-companion.is-visible {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(0);
+  transform: translateY(0) scale(1);
 }
 
-.mai-pixel-launcher {
+.mai-dock-launcher {
   position: relative;
+
   display: grid;
+  width: 88px;
+  height: 78px;
   place-items: center;
-  width: 116px;
-  min-height: 90px;
-  padding: 4px 4px 10px;
+
+  padding: 0;
+
   border: 0;
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 50% 54%, rgba(111, 140, 255, 0.12), transparent 58%),
-    radial-gradient(circle at 48% 64%, rgba(87, 224, 182, 0.08), transparent 45%);
+  background: transparent;
+
   cursor: pointer;
 }
 
-.mai-pixel-launcher::before {
-  content: "";
-  position: absolute;
-  inset: 8px 14px 18px;
-  border: 1px solid rgba(125, 150, 255, 0.12);
-  border-radius: 16px;
-  box-shadow: inset 0 0 18px rgba(120, 145, 255, 0.05);
+.mai-dock-launcher .mai-comic-bubble {
+  right: 5px;
+  top: -35px;
+
+  min-width: 96px;
+
+  transform-origin: 80% bottom;
 }
 
-.mai-pixel-launcher::after {
-  position: absolute;
-  right: 24px;
-  bottom: 3px;
-  left: 24px;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    rgba(102, 137, 255, 0.32),
-    rgba(87, 224, 182, 0.24),
-    transparent
-  );
-  content: "";
+.mai-dock-launcher .mai-comic-bubble::before {
+  right: 20px;
+  bottom: -10px;
+
+  transform: rotate(90deg);
 }
 
-.mai-pixel-grid {
-  --mai-pixel-size: 4px;
+.mai-dock-launcher .mai-comic-bubble::after {
+  display: none;
+}
+
+.mai-dock-orb {
+  position: relative;
+
   display: grid;
-  grid-template-columns: repeat(12, var(--mai-pixel-size));
-  grid-template-rows: repeat(13, var(--mai-pixel-size));
-  gap: 2px;
-  margin-top: 6px;
-  filter: drop-shadow(0 0 12px rgba(112, 145, 255, 0.25));
-}
+  width: 66px;
+  height: 66px;
+  place-items: center;
 
-.mai-pixel {
-  width: var(--mai-pixel-size);
-  height: var(--mai-pixel-size);
+  border: 1px solid rgba(142, 164, 255, 0.48);
   border-radius: 50%;
+
+  background:
+    radial-gradient(circle at 34% 27%, rgba(255, 255, 255, 0.13), transparent 18%),
+    radial-gradient(circle at 50% 38%, rgba(87, 224, 182, 0.11), transparent 42%),
+    linear-gradient(
+      to bottom,
+      rgba(91, 110, 181, 0.28) 0 46%,
+      rgba(6, 10, 19, 0.96) 46% 100%
+    );
+
+  box-shadow:
+    0 11px 26px rgba(0, 0, 0, 0.36),
+    0 0 28px rgba(113, 140, 255, 0.18),
+    inset 0 0 20px rgba(255, 255, 255, 0.045);
+
+  transform: scale(0.2) rotate(-8deg);
   opacity: 0;
+}
+
+.mai-dock-orb::before {
+  content: "";
+
+  position: absolute;
+  top: 45%;
+  right: -2px;
+  left: -2px;
+
+  height: 7px;
+
+  border-top: 1px solid rgba(0, 0, 0, 0.72);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+  background: rgba(5, 8, 15, 0.82);
+}
+
+.mai-dock-orb__outer {
+  position: absolute;
+  inset: -5px;
+
+  border: 1px solid rgba(87, 224, 182, 0.18);
+  border-radius: 50%;
+
+  opacity: 0;
+  transform: scale(0.72);
+}
+
+.mai-dock-orb__orbit {
+  position: absolute;
+  inset: -9px;
+
+  border: 1px solid transparent;
+  border-top-color: rgba(130, 156, 255, 0.58);
+  border-right-color: rgba(87, 224, 182, 0.28);
+  border-radius: 50%;
+
+  opacity: 0;
+}
+
+.mai-dock-orb__orbit--b {
+  inset: -13px;
+
+  border-top-color: rgba(255, 209, 92, 0.4);
+  border-right-color: transparent;
+  border-left-color: rgba(130, 156, 255, 0.22);
+}
+
+.mai-dock-orb__bot {
+  position: relative;
+  z-index: 3;
+
+  display: grid;
+  width: 33px;
+  height: 33px;
+  place-items: center;
+
+  border: 4px solid #080c14;
+  border-radius: 50%;
+
+  background:
+    radial-gradient(circle at 38% 30%, rgba(255, 255, 255, 0.14), transparent 28%),
+    linear-gradient(145deg, rgba(124, 151, 255, 0.3), rgba(87, 224, 182, 0.16)),
+    #dce5f8;
+
+  box-shadow:
+    0 0 0 1px rgba(148, 169, 255, 0.82),
+    0 0 16px rgba(101, 130, 255, 0.34);
+
   transform: scale(0.2);
-  transition:
-    opacity 160ms ease,
-    transform 190ms cubic-bezier(.2, .9, .2, 1.2),
-    box-shadow 160ms ease;
+  opacity: 0;
 }
 
-.mai-pixel--empty {
-  visibility: hidden;
+.mai-dock-orb__antenna {
+  position: absolute;
+  top: -9px;
+
+  width: 2px;
+  height: 9px;
+
+  background: #131a2a;
 }
 
-.mai-pixel--drawable[data-tone="mint"] {
-  background: var(--mai-mint);
-}
+.mai-dock-orb__antenna::before {
+  content: "";
 
-.mai-pixel--drawable[data-tone="blue"] {
-  background: var(--mai-blue);
-}
+  position: absolute;
+  top: -2px;
+  left: 50%;
 
-.mai-pixel--drawable[data-tone="gold"] {
+  width: 5px;
+  height: 5px;
+
+  border-radius: 50%;
+
   background: var(--mai-gold);
+
+  box-shadow: 0 0 7px rgba(255, 209, 92, 0.86);
+  transform: translateX(-50%);
 }
 
-.mai-pixel--drawable.is-on {
-  opacity: 0.98;
+.mai-dock-orb__face {
+  position: relative;
+
+  width: 21px;
+  height: 16px;
+
+  border-radius: 6px;
+
+  background: #101727;
+}
+
+.mai-dock-orb__eye {
+  position: absolute;
+  top: 5px;
+
+  width: 4px;
+  height: 4px;
+
+  border-radius: 50%;
+
+  background: #6f91ff;
+
+  box-shadow: 0 0 6px rgba(111, 145, 255, 0.9);
+}
+
+.mai-dock-orb__eye--left {
+  left: 4px;
+}
+
+.mai-dock-orb__eye--right {
+  right: 4px;
+}
+
+.mai-dock-orb__smile {
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+
+  width: 8px;
+  height: 4px;
+
+  border-bottom: 1px solid var(--mai-mint);
+  border-radius: 0 0 8px 8px;
+
+  transform: translateX(-50%);
+}
+
+.mai-dock-orb__scan {
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  right: 12px;
+  left: 12px;
+
+  height: 2px;
+
+  border-radius: 999px;
+
+  background:
+    linear-gradient(90deg, transparent, #81a1ff, #57e0b6, transparent);
+
+  box-shadow: 0 0 9px rgba(111, 145, 255, 0.75);
+
+  opacity: 0;
+}
+
+.mai-dock-orb__spark {
+  position: absolute;
+  z-index: 4;
+
+  width: 3px;
+  height: 3px;
+
+  border-radius: 50%;
+
+  background: var(--mai-blue);
+  box-shadow: 0 0 8px rgba(130, 156, 255, 0.84);
+
+  opacity: 0;
+}
+
+.mai-dock-orb__spark--1 {
+  top: 4px;
+  left: 12px;
+}
+
+.mai-dock-orb__spark--2 {
+  right: 5px;
+  top: 23px;
+
+  background: var(--mai-mint);
+  box-shadow: 0 0 8px rgba(87, 224, 182, 0.84);
+}
+
+.mai-dock-orb__spark--3 {
+  bottom: 7px;
+  left: 9px;
+
+  background: var(--mai-gold);
+  box-shadow: 0 0 8px rgba(255, 209, 92, 0.8);
+}
+
+.mai-dock-orb__spark--4 {
+  right: 13px;
+  bottom: 4px;
+
+  background: var(--mai-coral);
+  box-shadow: 0 0 8px rgba(255, 138, 91, 0.82);
+}
+
+/* build animation */
+
+.mai-dock-launcher.is-building .mai-dock-orb {
+  animation:
+    mai-orb-materialize 560ms cubic-bezier(.15, .9, .25, 1.15) 80ms forwards,
+    mai-orb-idle 4.2s ease-in-out 920ms infinite;
+}
+
+.mai-dock-launcher.is-building .mai-dock-orb__outer {
+  animation:
+    mai-ring-materialize 480ms ease 140ms forwards,
+    mai-ring-breathe 3.4s ease-in-out 900ms infinite;
+}
+
+.mai-dock-launcher.is-building .mai-dock-orb__bot {
+  animation:
+    mai-bot-materialize 480ms cubic-bezier(.2, 1.15, .4, 1) 430ms forwards;
+}
+
+.mai-dock-launcher.is-building .mai-dock-orb__orbit--a {
+  animation:
+    mai-orbit-materialize 420ms ease 240ms forwards,
+    mai-orbit-spin 7s linear 800ms infinite;
+}
+
+.mai-dock-launcher.is-building .mai-dock-orb__orbit--b {
+  animation:
+    mai-orbit-materialize 420ms ease 330ms forwards,
+    mai-orbit-spin-reverse 9s linear 850ms infinite;
+}
+
+.mai-dock-launcher.is-building .mai-dock-orb__scan {
+  animation: mai-scan 760ms ease 380ms forwards;
+}
+
+.mai-dock-launcher.is-building .mai-dock-orb__spark--1 {
+  animation: mai-spark 640ms ease 170ms forwards;
+}
+
+.mai-dock-launcher.is-building .mai-dock-orb__spark--2 {
+  animation: mai-spark 700ms ease 260ms forwards;
+}
+
+.mai-dock-launcher.is-building .mai-dock-orb__spark--3 {
+  animation: mai-spark 660ms ease 340ms forwards;
+}
+
+.mai-dock-launcher.is-building .mai-dock-orb__spark--4 {
+  animation: mai-spark 730ms ease 430ms forwards;
+}
+
+.mai-dock-launcher.is-built .mai-dock-orb {
+  opacity: 1;
+  transform: scale(1) rotate(0);
+  animation: mai-orb-idle 4.2s ease-in-out infinite;
+}
+
+.mai-dock-launcher.is-built .mai-dock-orb__outer {
+  opacity: 1;
+  transform: scale(1);
+  animation: mai-ring-breathe 3.4s ease-in-out infinite;
+}
+
+.mai-dock-launcher.is-built .mai-dock-orb__bot {
+  opacity: 1;
   transform: scale(1);
 }
 
-.mai-pixel--drawable[data-tone="mint"].is-on {
-  box-shadow: 0 0 8px rgba(87, 224, 182, 0.65);
+.mai-dock-launcher.is-built .mai-dock-orb__orbit {
+  opacity: 1;
 }
 
-.mai-pixel--drawable[data-tone="blue"].is-on {
-  box-shadow: 0 0 8px rgba(130, 156, 255, 0.68);
+.mai-dock-launcher.is-built .mai-dock-orb__orbit--a {
+  animation: mai-orbit-spin 7s linear infinite;
 }
 
-.mai-pixel--drawable[data-tone="gold"].is-on {
-  box-shadow: 0 0 8px rgba(255, 209, 92, 0.62);
+.mai-dock-launcher.is-built .mai-dock-orb__orbit--b {
+  animation: mai-orbit-spin-reverse 9s linear infinite;
 }
 
-.mai-pixel-launcher:hover .mai-pixel-grid {
-  filter: brightness(1.12) drop-shadow(0 0 16px rgba(112, 145, 255, 0.38));
+.mai-dock-launcher.is-built .mai-dock-orb__spark {
+  animation: mai-spark-idle 2.3s ease-in-out infinite alternate;
 }
 
-/* Put the comic bubble above/right for the tiny dock version */
-.mai-pixel-launcher .mai-comic-bubble {
-  top: -18px;
-  right: -2px;
-  left: auto;
-  margin-right: 0;
-  transform: scale(0.9);
+.mai-dock-launcher.is-built .mai-dock-orb__spark--2 {
+  animation-delay: 440ms;
 }
 
-.mai-pixel-launcher .mai-comic-bubble::before,
-.mai-pixel-launcher .mai-comic-bubble::after {
-  top: 100%;
-  left: 74%;
-  transform: none;
-  border-color: transparent;
+.mai-dock-launcher.is-built .mai-dock-orb__spark--3 {
+  animation-delay: 820ms;
 }
 
-.mai-pixel-launcher .mai-comic-bubble::before {
-  border-width: 12px 8px 0 8px;
-  border-top-color: rgba(235, 242, 255, 0.95);
+.mai-dock-launcher.is-built .mai-dock-orb__spark--4 {
+  animation-delay: 1180ms;
 }
 
-.mai-pixel-launcher .mai-comic-bubble::after {
-  top: calc(100% - 3px);
-  left: 75%;
-  border-width: 10px 7px 0 7px;
-  border-top-color: #ffffff;
+.mai-dock-launcher.is-disassembling .mai-dock-orb,
+.mai-dock-launcher.is-disassembling .mai-dock-orb__bot,
+.mai-dock-launcher.is-disassembling .mai-dock-orb__outer,
+.mai-dock-launcher.is-disassembling .mai-dock-orb__orbit {
+  animation: mai-orb-dematerialize 300ms ease forwards;
 }
 
-/* -----------------------------------------------------------
-   Chat panel
------------------------------------------------------------ */
+.mai-dock-launcher:hover .mai-dock-orb {
+  filter: brightness(1.12);
+}
+
+.mai-dock-launcher:hover .mai-dock-orb__bot {
+  transform: scale(1.07);
+}
+
+
+/* ==========================================================
+   CHAT PANEL
+========================================================== */
 
 .mai-chat-panel {
   position: fixed;
   z-index: 900;
   right: 24px;
   bottom: 112px;
+
   display: flex;
   width: min(440px, calc(100vw - 28px));
   height: min(650px, calc(100vh - 150px));
   flex-direction: column;
+
   overflow: hidden;
+
   border: 1px solid var(--mai-line);
   border-radius: 26px;
+
   background:
     radial-gradient(circle at 10% 0%, rgba(87, 224, 182, 0.07), transparent 34%),
     radial-gradient(circle at 100% 20%, rgba(130, 156, 255, 0.09), transparent 38%),
     var(--mai-bg);
+
   color: var(--mai-text);
+
   box-shadow:
     0 28px 90px rgba(0, 0, 0, 0.48),
     0 0 0 1px rgba(255, 255, 255, 0.025) inset,
     0 0 34px rgba(87, 125, 255, 0.11);
+
   backdrop-filter: blur(20px);
+
   opacity: 0;
   transform: translateY(18px) scale(0.97);
   pointer-events: none;
+
   transition:
     opacity 220ms ease,
     transform 260ms cubic-bezier(.2, .8, .2, 1);
@@ -443,8 +779,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+
   min-height: 72px;
   padding: 14px 16px 14px 18px;
+
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
 }
 
@@ -485,19 +823,26 @@
   width: 36px;
   height: 36px;
   place-items: center;
+
   padding: 0;
+
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 50%;
+
   background: rgba(255, 255, 255, 0.025);
   color: #c8d1e4;
+
   font: 300 26px/1 ui-sans-serif, system-ui, sans-serif;
+
   cursor: pointer;
 }
 
 .mai-chat-messages {
   flex: 1;
   overflow-y: auto;
+
   padding: 18px 18px 8px;
+
   scrollbar-width: thin;
   scrollbar-color: rgba(131, 157, 255, 0.34) transparent;
 }
@@ -505,23 +850,30 @@
 .mai-message {
   max-width: 88%;
   margin-bottom: 12px;
+
   padding: 12px 14px;
+
   border-radius: 17px;
+
   font: 500 13px/1.58 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .mai-message--assistant {
   margin-right: auto;
+
   border: 1px solid rgba(130, 156, 255, 0.13);
   border-bottom-left-radius: 6px;
+
   background: rgba(78, 95, 155, 0.13);
   color: #eaf0ff;
 }
 
 .mai-message--user {
   margin-left: auto;
+
   border: 1px solid rgba(87, 224, 182, 0.15);
   border-bottom-right-radius: 6px;
+
   background: rgba(87, 224, 182, 0.1);
   color: #f4fffb;
 }
@@ -535,21 +887,29 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+
   margin-top: 10px;
 }
 
 .mai-source-chip {
   display: inline-flex;
   align-items: center;
+
   max-width: 100%;
+
   padding: 5px 8px;
+
   overflow: hidden;
+
   border: 1px solid rgba(130, 156, 255, 0.17);
   border-radius: 999px;
+
   background: rgba(130, 156, 255, 0.07);
   color: #bfcaff;
+
   font: 700 9px/1.2 ui-sans-serif, system-ui, sans-serif;
   text-decoration: none;
+
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -569,19 +929,29 @@
 .mai-thinking-dot {
   width: 5px;
   height: 5px;
+
   border-radius: 50%;
   background: var(--mai-blue);
+
   animation: mai-thinking 900ms ease-in-out infinite alternate;
 }
 
-.mai-thinking-dot:nth-child(2) { animation-delay: 160ms; }
-.mai-thinking-dot:nth-child(3) { animation-delay: 320ms; }
+.mai-thinking-dot:nth-child(2) {
+  animation-delay: 160ms;
+}
+
+.mai-thinking-dot:nth-child(3) {
+  animation-delay: 320ms;
+}
 
 .mai-chat-suggestions {
   display: flex;
   gap: 7px;
+
   overflow-x: auto;
+
   padding: 6px 16px 10px;
+
   scrollbar-width: none;
 }
 
@@ -591,12 +961,17 @@
 
 .mai-suggestion {
   flex: 0 0 auto;
+
   padding: 7px 10px;
+
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
+
   background: rgba(255, 255, 255, 0.025);
   color: #aeb9cd;
+
   font: 650 10px/1.2 ui-sans-serif, system-ui, sans-serif;
+
   cursor: pointer;
 }
 
@@ -609,7 +984,9 @@
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 9px;
+
   padding: 12px 14px 14px;
+
   border-top: 1px solid rgba(255, 255, 255, 0.07);
 }
 
@@ -617,17 +994,25 @@
   width: 100%;
   min-height: 46px;
   max-height: 110px;
+
   resize: none;
+
   padding: 12px 13px;
+
   border: 1px solid rgba(130, 156, 255, 0.18);
   border-radius: 14px;
+
   outline: none;
+
   background: rgba(255, 255, 255, 0.035);
   color: #f6f8ff;
+
   font: 500 13px/1.35 ui-sans-serif, system-ui, sans-serif;
 }
 
-.mai-chat-input::placeholder { color: #737f95; }
+.mai-chat-input::placeholder {
+  color: #737f95;
+}
 
 .mai-chat-input:focus {
   border-color: rgba(130, 156, 255, 0.48);
@@ -640,13 +1025,17 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
+
   padding: 0 14px;
+
   border: 0;
   border-radius: 14px;
+
   background: linear-gradient(135deg, #78a1ff, #57e0b6);
   color: #08101c;
+
   font: 850 12px/1 ui-sans-serif, system-ui, sans-serif;
-  box-shadow: 0 8px 22px rgba(79, 164, 190, 0.15);
+
   cursor: pointer;
 }
 
@@ -656,7 +1045,7 @@
 }
 
 .mai-floating-launcher:focus-visible,
-.mai-pixel-launcher:focus-visible,
+.mai-dock-launcher:focus-visible,
 .mai-chat-close:focus-visible,
 .mai-suggestion:focus-visible,
 .mai-chat-send:focus-visible,
@@ -665,72 +1054,346 @@
   outline-offset: 3px;
 }
 
-@keyframes mai-thinking {
-  from { opacity: 0.34; transform: translateY(2px); }
-  to { opacity: 1; transform: translateY(-2px); }
+
+/* ==========================================================
+   ANIMATIONS
+========================================================== */
+
+@keyframes mai-bubble-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(7px) scale(0.78) rotate(-3deg);
+  }
+
+  60% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.04) rotate(1deg);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0);
+  }
 }
 
-@keyframes mai-bubble-wobble {
-  0% { transform: rotate(0deg); }
-  20% { transform: rotate(-2deg) scale(1.02); }
-  50% { transform: rotate(1.6deg) scale(1.04); }
-  100% { transform: rotate(0deg); }
+@keyframes mai-bubble-away {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.9);
+  }
 }
+
+@keyframes mai-caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes mai-orb-materialize {
+  0% {
+    opacity: 0;
+    transform: scale(0.18) rotate(-11deg);
+    filter: blur(5px);
+  }
+
+  60% {
+    opacity: 1;
+    transform: scale(1.08) rotate(2deg);
+    filter: blur(0);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes mai-bot-materialize {
+  0% {
+    opacity: 0;
+    transform: scale(0.15) translateY(6px);
+    filter: blur(4px);
+  }
+
+  70% {
+    opacity: 1;
+    transform: scale(1.08) translateY(-1px);
+    filter: blur(0);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes mai-ring-materialize {
+  from {
+    opacity: 0;
+    transform: scale(0.68);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes mai-orbit-materialize {
+  from {
+    opacity: 0;
+    transform: scale(0.5) rotate(-80deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) rotate(0);
+  }
+}
+
+@keyframes mai-orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes mai-orbit-spin-reverse {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes mai-scan {
+  0% {
+    opacity: 0;
+    transform: translateY(-7px) scaleX(0.3);
+  }
+
+  30% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(41px) scaleX(1);
+  }
+}
+
+@keyframes mai-spark {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.2);
+  }
+
+  65% {
+    opacity: 1;
+    transform: translateY(-3px) scale(1.35);
+  }
+
+  100% {
+    opacity: 0.7;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes mai-spark-idle {
+  from {
+    opacity: 0.28;
+    transform: scale(0.8);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1.35);
+  }
+}
+
+@keyframes mai-orb-idle {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(-3px) scale(1.015);
+  }
+}
+
+@keyframes mai-ring-breathe {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(0.96);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes mai-orb-dematerialize {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.48);
+  }
+}
+
+@keyframes mai-thinking {
+  from {
+    opacity: 0.34;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+
+/* ==========================================================
+   MOBILE
+   Much smaller provider companion + floating bot.
+========================================================== */
 
 @media (max-width: 720px) {
   .mai-floating-launcher {
-    right: 14px;
-    bottom: 14px;
+    right: 12px;
+    bottom: 12px;
+
+    width: 58px;
+    height: 58px;
   }
 
-  .mai-comic-bubble {
-    right: 50%;
-    top: -44px;
-    margin-right: 0;
-    transform: translateX(50%) scale(0.92);
+  .mai-floating-launcher .mai-bot {
+    transform: scale(0.76);
   }
 
-  .mai-comic-bubble::before,
-  .mai-comic-bubble::after {
-    top: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border-color: transparent;
-  }
+  .mai-floating-launcher .mai-comic-bubble {
+    right: 0;
+    top: -46px;
 
-  .mai-comic-bubble::before {
-    border-width: 12px 8px 0 8px;
-    border-top-color: rgba(235, 242, 255, 0.95);
-  }
+    min-width: 96px;
 
-  .mai-comic-bubble::after {
-    top: calc(100% - 3px);
-    border-width: 10px 7px 0 7px;
-    border-top-color: #ffffff;
-  }
-
-  .mai-chat-panel {
-    right: 10px;
-    bottom: 96px;
-    width: calc(100vw - 20px);
-    height: min(640px, calc(100vh - 116px));
-    border-radius: 22px;
+    transform-origin: 78% bottom;
   }
 
   .mai-dock-companion {
-    width: 104px;
-    height: 88px;
+    width: 68px;
+    height: 62px;
   }
 
-  .mai-pixel-launcher {
-    width: 102px;
-    min-height: 84px;
+  .mai-dock-launcher {
+    width: 64px;
+    height: 58px;
   }
 
-  .mai-pixel-launcher .mai-comic-bubble {
-    top: -38px;
-    right: -6px;
-    transform: scale(0.78);
+  .mai-dock-orb {
+    width: 48px;
+    height: 48px;
+  }
+
+  .mai-dock-orb__bot {
+    width: 25px;
+    height: 25px;
+
+    border-width: 3px;
+  }
+
+  .mai-dock-orb__face {
+    width: 16px;
+    height: 12px;
+
+    border-radius: 5px;
+  }
+
+  .mai-dock-orb__eye {
+    top: 3px;
+
+    width: 3px;
+    height: 3px;
+  }
+
+  .mai-dock-orb__eye--left {
+    left: 3px;
+  }
+
+  .mai-dock-orb__eye--right {
+    right: 3px;
+  }
+
+  .mai-dock-orb__smile {
+    bottom: 2px;
+    width: 6px;
+    height: 3px;
+  }
+
+  .mai-dock-orb__antenna {
+    top: -7px;
+    height: 7px;
+  }
+
+  .mai-dock-launcher .mai-comic-bubble {
+    right: -2px;
+    top: -36px;
+
+    min-width: 92px;
+    min-height: 32px;
+
+    padding: 6px 9px;
+  }
+
+  .mai-dock-launcher .mai-comic-bubble__text {
+    font-size: 10px;
+  }
+
+  .mai-chat-panel {
+    right: 8px;
+    bottom: 78px;
+
+    width: calc(100vw - 16px);
+    height: min(640px, calc(100vh - 94px));
+
+    border-radius: 22px;
+  }
+}
+
+@media (max-width: 420px) {
+  .mai-dock-companion {
+    width: 58px;
+    height: 54px;
+  }
+
+  .mai-dock-launcher {
+    width: 56px;
+    height: 52px;
+  }
+
+  .mai-dock-orb {
+    width: 42px;
+    height: 42px;
+  }
+
+  .mai-dock-orb__bot {
+    width: 22px;
+    height: 22px;
+  }
+
+  .mai-dock-launcher .mai-comic-bubble {
+    right: -1px;
+    top: -34px;
+
+    min-width: 84px;
   }
 }
 
@@ -738,9 +1401,15 @@
   .mai-floating-launcher,
   .mai-dock-companion,
   .mai-chat-panel,
-  .mai-pixel,
-  .mai-comic-bubble {
+  .mai-comic-bubble,
+  .mai-dock-orb,
+  .mai-dock-orb__bot,
+  .mai-dock-orb__outer,
+  .mai-dock-orb__orbit,
+  .mai-dock-orb__scan,
+  .mai-dock-orb__spark {
     transition-duration: 1ms !important;
     animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
   }
 }
