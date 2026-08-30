@@ -1,0 +1,752 @@
+/*
+  Mini AI Encyclopedia chatbot add-on.
+  All selectors are prefixed with mai- to avoid touching existing site CSS.
+*/
+
+:root {
+  --mai-bg: rgba(6, 10, 22, 0.92);
+  --mai-bg-strong: #070b16;
+  --mai-line: rgba(166, 188, 255, 0.18);
+  --mai-text: #f6f8ff;
+  --mai-muted: #98a4ba;
+  --mai-mint: #57e0b6;
+  --mai-blue: #829cff;
+  --mai-gold: #ffd15c;
+  --mai-danger: #ff6f8f;
+}
+
+/* -----------------------------------------------------------
+   Floating launcher
+----------------------------------------------------------- */
+
+.mai-floating-launcher {
+  position: fixed;
+  z-index: 880;
+  right: 24px;
+  bottom: 24px;
+
+  display: grid;
+  width: 76px;
+  height: 76px;
+  place-items: center;
+
+  padding: 0;
+  border: 1px solid rgba(144, 166, 255, 0.25);
+  border-radius: 50%;
+
+  background:
+    radial-gradient(circle at 30% 20%, rgba(91, 231, 186, 0.16), transparent 38%),
+    radial-gradient(circle at 72% 72%, rgba(114, 137, 255, 0.18), transparent 44%),
+    rgba(7, 10, 20, 0.88);
+
+  color: var(--mai-text);
+
+  box-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 0 28px rgba(93, 126, 255, 0.18);
+
+  backdrop-filter: blur(14px);
+
+  cursor: pointer;
+
+  transition:
+    transform 220ms ease,
+    opacity 220ms ease,
+    filter 220ms ease;
+}
+
+.mai-floating-launcher:hover {
+  transform: translateY(-4px) scale(1.04);
+  filter: brightness(1.08);
+}
+
+.mai-floating-launcher.is-docked {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(18px) scale(0.88);
+}
+
+.mai-launcher-tooltip {
+  position: absolute;
+  right: 4px;
+  bottom: calc(100% + 10px);
+
+  min-width: max-content;
+  padding: 7px 10px;
+
+  border: 1px solid var(--mai-line);
+  border-radius: 999px;
+
+  background: rgba(6, 10, 22, 0.9);
+  color: #dce5ff;
+
+  font: 700 11px/1 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  opacity: 0;
+  transform: translateY(5px);
+  pointer-events: none;
+
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.mai-floating-launcher:hover .mai-launcher-tooltip,
+.mai-floating-launcher:focus-visible .mai-launcher-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+
+/* -----------------------------------------------------------
+   CSS robot inspired by the AI robot inside the title
+----------------------------------------------------------- */
+
+.mai-bot {
+  position: relative;
+  display: block;
+  width: 60px;
+  height: 60px;
+}
+
+.mai-bot__screen {
+  position: absolute;
+  top: 15px;
+  left: 7px;
+
+  width: 46px;
+  height: 37px;
+
+  overflow: hidden;
+
+  border: 2px solid rgba(229, 236, 255, 0.82);
+  border-radius: 13px;
+
+  background:
+    linear-gradient(135deg, rgba(24, 31, 54, 0.92), rgba(7, 11, 22, 0.98));
+
+  box-shadow:
+    0 0 0 2px rgba(129, 152, 255, 0.08),
+    0 0 18px rgba(106, 138, 255, 0.25),
+    0 0 18px rgba(87, 224, 182, 0.09) inset;
+}
+
+.mai-bot__antenna {
+  position: absolute;
+  top: 1px;
+  left: 29px;
+
+  width: 2px;
+  height: 16px;
+
+  background: linear-gradient(to bottom, var(--mai-gold), var(--mai-blue));
+}
+
+.mai-bot__antenna-light {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+
+  width: 8px;
+  height: 8px;
+
+  border-radius: 50%;
+  background: var(--mai-gold);
+
+  box-shadow: 0 0 10px rgba(255, 209, 92, 0.85);
+  transform: translateX(-50%);
+}
+
+.mai-bot__ear {
+  position: absolute;
+  top: 27px;
+
+  width: 7px;
+  height: 17px;
+
+  border: 2px solid rgba(225, 233, 255, 0.74);
+  background: #080c18;
+}
+
+.mai-bot__ear--left {
+  left: 1px;
+  border-radius: 5px 0 0 5px;
+}
+
+.mai-bot__ear--right {
+  right: 1px;
+  border-radius: 0 5px 5px 0;
+}
+
+.mai-bot__ai {
+  position: absolute;
+  inset: 0;
+
+  display: grid;
+  place-items: center;
+
+  font: 900 20px/1 "Segoe UI", system-ui, sans-serif;
+
+  background: linear-gradient(
+    135deg,
+    #ff8f52 8%,
+    #ffd15c 34%,
+    #71df9c 56%,
+    #779cff 82%
+  );
+
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+
+  opacity: 0.32;
+  transform: translateY(-1px);
+}
+
+.mai-bot__eyes {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+
+  display: flex;
+  gap: 13px;
+
+  transform: translateX(-50%);
+}
+
+.mai-bot__eyes span {
+  width: 5px;
+  height: 5px;
+
+  border-radius: 50%;
+  background: #7e9fff;
+
+  box-shadow: 0 0 7px rgba(126, 159, 255, 0.85);
+}
+
+.mai-bot__mouth {
+  position: absolute;
+  left: 50%;
+  bottom: 8px;
+
+  width: 14px;
+  height: 6px;
+
+  border-bottom: 2px solid var(--mai-mint);
+  border-radius: 0 0 12px 12px;
+
+  transform: translateX(-50%);
+  box-shadow: 0 4px 8px rgba(87, 224, 182, 0.22);
+}
+
+
+/* -----------------------------------------------------------
+   Pixel rebuild above existing provider dock
+----------------------------------------------------------- */
+
+.mai-dock-companion {
+  position: fixed;
+  z-index: 870;
+
+  width: 176px;
+  height: 134px;
+
+  display: grid;
+  place-items: center;
+
+  opacity: 0;
+  pointer-events: none;
+
+  transform: translateY(10px);
+  transition:
+    opacity 260ms ease,
+    transform 320ms ease;
+}
+
+.mai-dock-companion.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.mai-pixel-launcher {
+  position: relative;
+
+  display: grid;
+  place-items: center;
+
+  width: 156px;
+  min-height: 126px;
+
+  padding: 10px 12px 14px;
+
+  border: 0;
+  border-radius: 26px;
+
+  background:
+    radial-gradient(circle at 50% 54%, rgba(111, 140, 255, 0.08), transparent 56%);
+
+  cursor: pointer;
+}
+
+.mai-pixel-launcher::after {
+  position: absolute;
+  right: 24px;
+  bottom: 3px;
+  left: 24px;
+
+  height: 1px;
+
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(102, 137, 255, 0.4),
+    rgba(87, 224, 182, 0.32),
+    transparent
+  );
+
+  content: "";
+}
+
+.mai-pixel-grid {
+  --mai-pixel-size: 5px;
+
+  display: grid;
+  grid-template-columns: repeat(16, var(--mai-pixel-size));
+  grid-template-rows: repeat(18, var(--mai-pixel-size));
+  gap: 2px;
+
+  filter: drop-shadow(0 0 12px rgba(112, 145, 255, 0.25));
+}
+
+.mai-pixel {
+  width: var(--mai-pixel-size);
+  height: var(--mai-pixel-size);
+
+  border-radius: 1px;
+
+  opacity: 0;
+  transform: scale(0.25) rotate(20deg);
+
+  transition:
+    opacity 160ms ease,
+    transform 190ms cubic-bezier(.2, .9, .2, 1.2),
+    box-shadow 160ms ease;
+}
+
+.mai-pixel--empty {
+  visibility: hidden;
+}
+
+.mai-pixel--drawable[data-tone="mint"] {
+  background: var(--mai-mint);
+}
+
+.mai-pixel--drawable[data-tone="blue"] {
+  background: var(--mai-blue);
+}
+
+.mai-pixel--drawable[data-tone="gold"] {
+  background: var(--mai-gold);
+}
+
+.mai-pixel--drawable.is-on {
+  opacity: 0.96;
+  transform: scale(1) rotate(0);
+}
+
+.mai-pixel--drawable[data-tone="mint"].is-on {
+  box-shadow: 0 0 8px rgba(87, 224, 182, 0.58);
+}
+
+.mai-pixel--drawable[data-tone="blue"].is-on {
+  box-shadow: 0 0 8px rgba(130, 156, 255, 0.62);
+}
+
+.mai-pixel--drawable[data-tone="gold"].is-on {
+  box-shadow: 0 0 8px rgba(255, 209, 92, 0.55);
+}
+
+.mai-pixel-launcher:hover .mai-pixel-grid {
+  filter:
+    brightness(1.12)
+    drop-shadow(0 0 16px rgba(112, 145, 255, 0.38));
+}
+
+
+/* -----------------------------------------------------------
+   Chat panel
+----------------------------------------------------------- */
+
+.mai-chat-panel {
+  position: fixed;
+  z-index: 900;
+  right: 24px;
+  bottom: 112px;
+
+  display: flex;
+  width: min(440px, calc(100vw - 28px));
+  height: min(650px, calc(100vh - 150px));
+  flex-direction: column;
+
+  overflow: hidden;
+
+  border: 1px solid var(--mai-line);
+  border-radius: 26px;
+
+  background:
+    radial-gradient(circle at 10% 0%, rgba(87, 224, 182, 0.07), transparent 34%),
+    radial-gradient(circle at 100% 20%, rgba(130, 156, 255, 0.09), transparent 38%),
+    var(--mai-bg);
+
+  color: var(--mai-text);
+
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.48),
+    0 0 0 1px rgba(255, 255, 255, 0.025) inset,
+    0 0 34px rgba(87, 125, 255, 0.11);
+
+  backdrop-filter: blur(20px);
+
+  opacity: 0;
+  transform: translateY(18px) scale(0.97);
+  pointer-events: none;
+
+  transition:
+    opacity 220ms ease,
+    transform 260ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.mai-chat-panel.is-open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.mai-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  min-height: 72px;
+  padding: 14px 16px 14px 18px;
+
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.mai-chat-header__identity {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.mai-chat-header__identity strong,
+.mai-chat-header__identity small {
+  display: block;
+}
+
+.mai-chat-header__identity strong {
+  color: #f7f9ff;
+  font: 800 14px/1.2 ui-sans-serif, system-ui, sans-serif;
+}
+
+.mai-chat-header__identity small {
+  margin-top: 4px;
+  color: var(--mai-muted);
+  font: 500 11px/1.2 ui-sans-serif, system-ui, sans-serif;
+}
+
+.mai-chat-status {
+  width: 9px;
+  height: 9px;
+
+  border-radius: 50%;
+
+  background: var(--mai-mint);
+  box-shadow:
+    0 0 0 5px rgba(87, 224, 182, 0.08),
+    0 0 13px rgba(87, 224, 182, 0.78);
+}
+
+.mai-chat-close {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+
+  padding: 0;
+
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 50%;
+
+  background: rgba(255, 255, 255, 0.025);
+  color: #c8d1e4;
+
+  font: 300 26px/1 ui-sans-serif, system-ui, sans-serif;
+
+  cursor: pointer;
+}
+
+.mai-chat-messages {
+  flex: 1;
+
+  overflow-y: auto;
+
+  padding: 18px 18px 8px;
+
+  scrollbar-width: thin;
+  scrollbar-color: rgba(131, 157, 255, 0.34) transparent;
+}
+
+.mai-message {
+  max-width: 88%;
+  margin-bottom: 12px;
+
+  padding: 12px 14px;
+
+  border-radius: 17px;
+
+  font: 500 13px/1.58 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.mai-message--assistant {
+  margin-right: auto;
+
+  border: 1px solid rgba(130, 156, 255, 0.13);
+  border-bottom-left-radius: 6px;
+
+  background: rgba(78, 95, 155, 0.13);
+  color: #eaf0ff;
+}
+
+.mai-message--user {
+  margin-left: auto;
+
+  border: 1px solid rgba(87, 224, 182, 0.15);
+  border-bottom-right-radius: 6px;
+
+  background: rgba(87, 224, 182, 0.1);
+  color: #f4fffb;
+}
+
+.mai-message__body {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.mai-message__sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  margin-top: 10px;
+}
+
+.mai-source-chip {
+  display: inline-flex;
+  align-items: center;
+
+  max-width: 100%;
+  padding: 5px 8px;
+
+  overflow: hidden;
+
+  border: 1px solid rgba(130, 156, 255, 0.17);
+  border-radius: 999px;
+
+  background: rgba(130, 156, 255, 0.07);
+  color: #bfcaff;
+
+  font: 700 9px/1.2 ui-sans-serif, system-ui, sans-serif;
+  text-decoration: none;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mai-source-chip:hover {
+  border-color: rgba(130, 156, 255, 0.4);
+  color: #e3e8ff;
+}
+
+.mai-message--pending {
+  display: inline-flex;
+  width: auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.mai-thinking-dot {
+  width: 5px;
+  height: 5px;
+
+  border-radius: 50%;
+  background: var(--mai-blue);
+
+  animation: mai-thinking 900ms ease-in-out infinite alternate;
+}
+
+.mai-thinking-dot:nth-child(2) {
+  animation-delay: 160ms;
+}
+
+.mai-thinking-dot:nth-child(3) {
+  animation-delay: 320ms;
+}
+
+.mai-chat-suggestions {
+  display: flex;
+  gap: 7px;
+
+  overflow-x: auto;
+
+  padding: 6px 16px 10px;
+
+  scrollbar-width: none;
+}
+
+.mai-chat-suggestions::-webkit-scrollbar {
+  display: none;
+}
+
+.mai-suggestion {
+  flex: 0 0 auto;
+
+  padding: 7px 10px;
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+
+  background: rgba(255, 255, 255, 0.025);
+  color: #aeb9cd;
+
+  font: 650 10px/1.2 ui-sans-serif, system-ui, sans-serif;
+
+  cursor: pointer;
+}
+
+.mai-suggestion:hover {
+  border-color: rgba(130, 156, 255, 0.26);
+  color: #e8edff;
+}
+
+.mai-chat-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 9px;
+
+  padding: 12px 14px 14px;
+
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.mai-chat-input {
+  width: 100%;
+  min-height: 46px;
+  max-height: 110px;
+
+  resize: none;
+
+  padding: 12px 13px;
+
+  border: 1px solid rgba(130, 156, 255, 0.18);
+  border-radius: 14px;
+
+  outline: none;
+
+  background: rgba(255, 255, 255, 0.035);
+  color: #f6f8ff;
+
+  font: 500 13px/1.35 ui-sans-serif, system-ui, sans-serif;
+}
+
+.mai-chat-input::placeholder {
+  color: #737f95;
+}
+
+.mai-chat-input:focus {
+  border-color: rgba(130, 156, 255, 0.48);
+  box-shadow: 0 0 0 3px rgba(130, 156, 255, 0.07);
+}
+
+.mai-chat-send {
+  display: inline-flex;
+  min-width: 78px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  padding: 0 14px;
+
+  border: 0;
+  border-radius: 14px;
+
+  background: linear-gradient(135deg, #78a1ff, #57e0b6);
+  color: #08101c;
+
+  font: 850 12px/1 ui-sans-serif, system-ui, sans-serif;
+
+  box-shadow: 0 8px 22px rgba(79, 164, 190, 0.15);
+  cursor: pointer;
+}
+
+.mai-chat-send:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
+.mai-floating-launcher:focus-visible,
+.mai-pixel-launcher:focus-visible,
+.mai-chat-close:focus-visible,
+.mai-suggestion:focus-visible,
+.mai-chat-send:focus-visible,
+.mai-source-chip:focus-visible {
+  outline: 3px solid rgba(130, 156, 255, 0.42);
+  outline-offset: 3px;
+}
+
+@keyframes mai-thinking {
+  from {
+    opacity: 0.34;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+@media (max-width: 720px) {
+  .mai-floating-launcher {
+    right: 14px;
+    bottom: 14px;
+  }
+
+  .mai-chat-panel {
+    right: 10px;
+    bottom: 96px;
+
+    width: calc(100vw - 20px);
+    height: min(640px, calc(100vh - 116px));
+
+    border-radius: 22px;
+  }
+
+  .mai-dock-companion {
+    transform: translateY(8px) scale(0.88);
+  }
+
+  .mai-dock-companion.is-visible {
+    transform: translateY(0) scale(0.88);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mai-floating-launcher,
+  .mai-dock-companion,
+  .mai-chat-panel,
+  .mai-pixel {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+}
