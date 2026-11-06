@@ -23,38 +23,74 @@ const ENGLISH_DATE_PATTERN =
 
 const ISO_DATE_PATTERN = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/;
 
+// The Google AI Studio documentation site can return an app shell without
+// server-rendered release entries. This read-only HTML mirror is a fallback,
+// NOT the canonical source. Entry links always point to Google's official page.
+export const GEMINI_DEVELOPER_FALLBACK_URL =
+  "https://fd.xuwubk.eu.org/https/ai.google.dev/gemini-api/docs/changelog";
+
 export async function fetchGeminiDeveloperChangelog(options = {}) {
   const fetchImpl = options.fetchImpl || globalThis.fetch;
-
   if (typeof fetchImpl !== "function") {
     throw new Error("A fetch implementation is required.");
   }
 
-  const response = await fetchImpl(GEMINI_DEVELOPER_CHANGELOG_URL, {
-    headers: {
-      Accept: "text/html,application/xhtml+xml",
-      "Accept-Language": "en-US,en;q=0.9",
-      // A normal browser user agent avoids requesting a special bot response.
-      "User-Agent":
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-        "AppleWebKit/537.36 (KHTML, like Gecko) " +
-        "Chrome/131.0.0.0 Safari/537.36"
-    },
-    redirect: "follow"
-  });
+  const sources = [
+    { url: GEMINI_DEVELOPER_CHANGELOG_URL, label: "Google" },
+    { url: GEMINI_DEVELOPER_FALLBACK_URL, label: "fallback mirror" }
+  ];
+  const failures = [];
 
-  if (!response.ok) {
-    throw new Error(
-      `Gemini developer changelog request failed with HTTP ${response.status}.`
-    );
+  for (const source of sources) {
+    try {
+      const response = await fetchImpl(source.url, {
+        headers: {
+          Accept: "text/html,text/markdown,text/plain;q=0.9,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.9",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+            "AppleWebKit/537.36 (KHTML, like Gecko) " +
+            "Chrome/131.0.0.0 Safari/537.36"
+        },
+        redirect: "follow",
+        signal: AbortSignal.timeout(8000)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const items = parseGeminiDeveloperChangelog(await response.text());
+      if (source.label !== "Google") {
+        console.warn(
+          "Gemini developer changelog: Google returned no usable release notes; " +
+          "using read-only mirror data. Source links still target Google."
+        );
+      }
+      return items;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      failures.push(`${source.label}: ${reason}`);
+    }
   }
 
-  return parseGeminiDeveloperChangelog(await response.text());
+  throw new Error(
+    "Gemini API developer feed unavailable after checking Google and the fallback mirror. " +
+    failures.join(" | ").slice(0, 500)
+  );
 }
 
 export function parseGeminiDeveloperChangelog(html) {
   if (typeof html !== "string" || !html.trim()) {
     throw new Error("Gemini developer changelog HTML was empty.");
+  }
+
+  // Some read-only renderers expose the official changelog as Markdown.
+  // A real HTML page is still handled by the existing Cheerio parser below.
+  if (!/^\s*<(?:!doctype|html|head|body|main|article|div|section)\b/i.test(html) &&
+      /^#{2,4}\s+\S+/m.test(html)) {
+    const markdownEntries = parseGeminiDeveloperMarkdown(html);
+    if (markdownEntries.length) return markdownEntries;
   }
 
   const $ = cheerio.load(html);
@@ -130,6 +166,81 @@ export function parseGeminiDeveloperChangelog(html) {
   }
 
   return deduplicated;
+}
+
+// Parse the same dated bullet format when a fallback returns Markdown
+// rather than pre-rendered HTML. This keeps the API schema unchanged.
+export function parseGeminiDeveloperMarkdown(markdown) {
+  const lines = String(markdown || "").replace(/\r\n?/g, "\n").split("\n");
+  const dateHeading = /^#{2,4}\s+(.+?)(?:\s+\{%\s*id=["']([^"']+)["']\s*%\})?\s*$/;
+  const bullet = /^(\s*)(?:[-*+]\s+|\d+\.\s+)(.+)$/;
+  const releases = [];
+  let date = "";
+  let anchor = "";
+  let category = "";
+  let current = null;
+
+  const finishBullet = () => {
+    if (!current || !date) { current = null; return; }
+    const summary = current.parts.join(" ").replace(/\s+/g, " ").trim();
+    if (summary) {
+      const clean = cleanMarkdown(summary);
+      const title = createGeminiTitle(category, `• ${clean}`);
+      const entry = createEntry(date, title, `• ${clean}`, category, null);
+      entry.sourceUrl = anchor
+        ? `${GEMINI_DEVELOPER_CHANGELOG_URL}#${encodeURIComponent(anchor)}`
+        : GEMINI_DEVELOPER_CHANGELOG_URL;
+      releases.push(entry);
+    }
+    current = null;
+  };
+
+  for (const line of lines) {
+    const heading = line.match(dateHeading);
+    if (heading) {
+      const parsed = normaliseDate(heading[1].replace(/\s+\{%.*$/, ""));
+      if (parsed) {
+        finishBullet();
+        date = parsed;
+        anchor = heading[2] || (heading[1].match(/\{%\s*id=["']([^"']+)["']/i) || [])[1] || "";
+        category = "";
+        continue;
+      }
+      // An unrelated heading ends the previous release section.
+      if (date) { finishBullet(); date = ""; }
+    }
+    if (!date) continue;
+
+    const categoryMatch = line.trim().match(/^\*\*(API|Model|SDK|AI Studio|Library|Tool|Live API) updates?:?\*\*:?$/i);
+    if (categoryMatch) {
+      finishBullet();
+      category = categoryMatch[1];
+      continue;
+    }
+
+    const item = line.match(bullet);
+    if (item && item[1].length <= 2) {
+      finishBullet();
+      current = { parts: [item[2]] };
+      continue;
+    }
+
+    if (current && line.trim()) {
+      if (item) current.parts.push(`; ${item[2]}`);
+      else current.parts.push(line.trim());
+    }
+  }
+  finishBullet();
+  return deduplicateEntries(releases).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+function cleanMarkdown(value) {
+  return String(value)
+    .replace(/\[([^\]]+)\]\((?:[^()]|\([^()]*\))*\)/g, "$1")
+    .replace(/[`*]/g, "")
+    .replace(/<[^>]*>/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function findArticleRoot($) {
@@ -321,6 +432,7 @@ function validateDate(year, month, day) {
 }
 
 function buildSourceUrl(headingNode) {
+  if (!headingNode) return GEMINI_DEVELOPER_CHANGELOG_URL;
   const container = headingNode.is("h2, h3, h4")
     ? headingNode
     : headingNode.closest("h2, h3, h4");
