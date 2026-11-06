@@ -3,23 +3,25 @@ import * as cheerio from "cheerio";
 export const GEMINI_DEVELOPER_CHANGELOG_URL =
   "https://ai.google.dev/gemini-api/docs/changelog?hl=en";
 
-const DATE_PATTERN =
-  /^(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})$/i;
-
 const MONTHS = {
-  january: "01",
-  february: "02",
-  march: "03",
-  april: "04",
+  jan: "01", january: "01",
+  feb: "02", february: "02",
+  mar: "03", march: "03",
+  apr: "04", april: "04",
   may: "05",
-  june: "06",
-  july: "07",
-  august: "08",
-  september: "09",
-  october: "10",
-  november: "11",
-  december: "12"
+  jun: "06", june: "06",
+  jul: "07", july: "07",
+  aug: "08", august: "08",
+  sep: "09", sept: "09", september: "09",
+  oct: "10", october: "10",
+  nov: "11", november: "11",
+  dec: "12", december: "12"
 };
+
+const ENGLISH_DATE_PATTERN =
+  /^(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$/i;
+
+const ISO_DATE_PATTERN = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/;
 
 export async function fetchGeminiDeveloperChangelog(options = {}) {
   const fetchImpl = options.fetchImpl || globalThis.fetch;
@@ -32,7 +34,11 @@ export async function fetchGeminiDeveloperChangelog(options = {}) {
     headers: {
       Accept: "text/html,application/xhtml+xml",
       "Accept-Language": "en-US,en;q=0.9",
-      "User-Agent": "Mini-AI-Encyclopedia/1.2 (+https://vercel.com)"
+      // A normal browser user agent avoids requesting a special bot response.
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+        "AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Chrome/131.0.0.0 Safari/537.36"
     },
     redirect: "follow"
   });
@@ -54,31 +60,29 @@ export function parseGeminiDeveloperChangelog(html) {
   const $ = cheerio.load(html);
   const articleRoot = findArticleRoot($);
   const allNodes = articleRoot.find("*").toArray();
-  const dateHeadings = findDateHeadings($, articleRoot).toArray();
+  const dateHeadings = findDateHeadings($, articleRoot);
 
   if (!dateHeadings.length) {
+    const title = cleanText($("title").first().text()) || "(no page title)";
+    const headingCount = articleRoot.find("h2, h3, h4").length;
     throw new Error(
-      "No Gemini API release-date headings were found. Google may have changed the page markup."
+      "No Gemini API release-date headings were found. " +
+      `Received page title: ${title}; headings found: ${headingCount}. ` +
+      "Google may have changed the markup or returned an unexpected page."
     );
   }
 
   const entries = [];
 
   dateHeadings.forEach(function (headingNode, headingIndex) {
-    const dateText = cleanText($(headingNode).text());
-    const date = normaliseDate(dateText);
-
-    if (!date) {
-      return;
-    }
+    const date = getNodeDate($, $(headingNode));
+    if (!date) return;
 
     const startIndex = allNodes.indexOf(headingNode);
     const nextHeading = dateHeadings[headingIndex + 1];
     const endIndex = nextHeading ? allNodes.indexOf(nextHeading) : allNodes.length;
 
-    if (startIndex < 0 || endIndex <= startIndex) {
-      return;
-    }
+    if (startIndex < 0 || endIndex <= startIndex) return;
 
     const sectionNodes = allNodes.slice(startIndex + 1, endIndex);
     const topLevelItems = sectionNodes.filter(function (node) {
@@ -90,14 +94,10 @@ export function parseGeminiDeveloperChangelog(html) {
       topLevelItems.forEach(function (itemNode) {
         const item = $(itemNode);
         const summary = formatListItem($, item);
-
-        if (!summary) {
-          return;
-        }
+        if (!summary) return;
 
         const category = findNearestCategory($, sectionNodes, itemNode);
         const title = createGeminiTitle(category, summary);
-
         entries.push(createEntry(date, title, summary, category, $(headingNode)));
       });
       return;
@@ -142,30 +142,59 @@ function findArticleRoot($) {
   ];
 
   for (const selector of selectors) {
-    const match = $(selector).first();
-    if (match.length && findDateHeadings($, match).length) {
-      return match;
+    for (const node of $(selector).toArray()) {
+      const root = $(node);
+      if (findDateHeadings($, root).length) return root;
     }
   }
 
-  return $.root();
+  return $("main").first().length ? $("main").first() : $.root();
 }
 
 function findDateHeadings($, root) {
-  const devsiteHeadings = root.find("span.devsite-heading").filter(function () {
-    return DATE_PATTERN.test(cleanText($(this).text()));
+  // Prefer complete heading elements. Fall back to Google's internal
+  // .devsite-heading spans or <time> elements if the wrapping heading changed.
+  const candidates = root
+    .find("h2, h3, h4, .devsite-heading, time[datetime]")
+    .toArray();
+  const selected = [];
+  const selectedSet = new Set();
+
+  candidates.forEach(function (node) {
+    const element = $(node);
+    if (!getNodeDate($, element)) return;
+
+    // Do not mistake an incidental date inside a release bullet for a section.
+    if (element.parents("li, p, blockquote").length) return;
+
+    // Avoid splitting the same date into both the heading and its inner span.
+    let ancestor = node.parent;
+    while (ancestor) {
+      if (selectedSet.has(ancestor)) return;
+      ancestor = ancestor.parent;
+    }
+
+    selected.push(node);
+    selectedSet.add(node);
   });
 
-  if (devsiteHeadings.length) {
-    return devsiteHeadings;
+  return selected;
+}
+
+function getNodeDate($, element) {
+  const values = [
+    element.attr("datetime"),
+    element.attr("data-text"),
+    element.find("time[datetime]").first().attr("datetime"),
+    element.find(".devsite-heading").first().text(),
+    element.text()
+  ];
+
+  for (const value of values) {
+    const date = normaliseDate(value);
+    if (date) return date;
   }
-
-  return root.find("h2, h3").filter(function () {
-    const element = $(this);
-    return DATE_PATTERN.test(
-      cleanText(element.attr("data-text") || element.text())
-    );
-  });
+  return "";
 }
 
 function formatListItem($, item, depth = 0) {
@@ -182,9 +211,7 @@ function formatListItem($, item, depth = 0) {
   item.children("ul, ol").each(function () {
     $(this).children("li").each(function () {
       const nested = formatListItem($, $(this), depth + 1);
-      if (nested) {
-        lines.push(nested);
-      }
+      if (nested) lines.push(nested);
     });
   });
 
@@ -196,20 +223,13 @@ function findNearestCategory($, sectionNodes, itemNode) {
 
   for (let index = itemIndex - 1; index >= 0; index -= 1) {
     const element = $(sectionNodes[index]);
-
-    if (element.is("li")) {
-      continue;
-    }
+    if (element.is("li")) continue;
 
     const text = cleanText(element.text());
-
     if (/^(API|Model|SDK|AI Studio|Library|Tool|Live API) updates?:?$/i.test(text)) {
       return text.replace(/\s*updates?:?$/i, "");
     }
-
-    if (element.is("h3, h4")) {
-      break;
-    }
+    if (element.is("h3, h4")) break;
   }
 
   return "";
@@ -221,7 +241,6 @@ function createGeminiTitle(category, summary) {
     .replace(/\s+/g, " ")
     .trim();
   const title = firstWords(mainText, 9);
-
   return category ? `${category}: ${title}` : title;
 }
 
@@ -248,58 +267,64 @@ function classifyGeminiDeveloperTags(title, summary, category) {
   if (containsAny(text, ["deprecated", "deprecation", "sunset", "shut down", "no longer supported", "retired"])) {
     tags.push("Deprecated");
   }
-
   if (containsAny(text, ["pricing", "price", "billing", "cost", "paid tier"])) {
     tags.push("Pricing");
   }
-
   if (containsAny(text, ["fixed", "fix", "bug", "resolved", "issue", "reliability"])) {
     tags.push("Fixed");
   }
-
   if (containsAny(text, ["model", "gemini", "gemma", "imagen", "veo", "lyria", "embedding"])) {
     tags.push("Model update");
   }
-
   if (containsAny(text, ["api", "sdk", "library", "generatecontent", "live api", "function call", "tool", "endpoint"])) {
     tags.push("API");
   }
-
   if (containsAny(text, ["released", "launched", "introduced", "added", "support for", "now available"])) {
     tags.push("New feature");
   }
-
   if (containsAny(text, ["updated", "improved", "enhanced", "expanded", "increased", "faster"])) {
     tags.push("Improvement");
   }
-
   if (containsAny(text, ["safety", "responsible ai", "content filter", "harm", "security"])) {
     tags.push("Safety");
   }
-
   return tags.length ? Array.from(new Set(tags)) : ["API"];
 }
 
 function normaliseDate(value) {
-  const match = String(value || "").match(DATE_PATTERN);
-  if (!match) {
-    return "";
+  const text = cleanText(value)
+    .replace(/[¶#\u200b]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const iso = text.match(ISO_DATE_PATTERN);
+  if (iso) {
+    return validateDate(Number(iso[1]), Number(iso[2]), Number(iso[3]));
   }
 
-  const month = MONTHS[match[1].toLowerCase()];
-  if (!month) {
-    return "";
-  }
+  const english = text.match(ENGLISH_DATE_PATTERN);
+  if (!english) return "";
 
-  return `${match[3]}-${month}-${String(match[2]).padStart(2, "0")}`;
+  const month = MONTHS[english[1].toLowerCase()];
+  if (!month) return "";
+  return validateDate(Number(english[3]), Number(month), Number(english[2]));
+}
+
+function validateDate(year, month, day) {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) return "";
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
 function buildSourceUrl(headingNode) {
-  const container = headingNode.is("h2, h3")
+  const container = headingNode.is("h2, h3, h4")
     ? headingNode
-    : headingNode.closest("h2, h3");
+    : headingNode.closest("h2, h3, h4");
   const id = container.attr("id") || headingNode.attr("id");
-
   return id
     ? `${GEMINI_DEVELOPER_CHANGELOG_URL}#${encodeURIComponent(id)}`
     : GEMINI_DEVELOPER_CHANGELOG_URL;
@@ -307,21 +332,16 @@ function buildSourceUrl(headingNode) {
 
 function deduplicateEntries(entries) {
   const byKey = new Map();
-
   entries.forEach(function (entry) {
     const key = `${entry.date}|${entry.title.toLowerCase()}`;
     if (!byKey.has(key)) {
       byKey.set(key, entry);
       return;
     }
-
     const existing = byKey.get(key);
-    if (entry.summary.length > existing.summary.length) {
-      existing.summary = entry.summary;
-    }
+    if (entry.summary.length > existing.summary.length) existing.summary = entry.summary;
     existing.tags = Array.from(new Set(existing.tags.concat(entry.tags)));
   });
-
   return Array.from(byKey.values());
 }
 
@@ -332,11 +352,7 @@ function containsAny(text, terms) {
 }
 
 function firstWords(value, count) {
-  return String(value || "")
-    .trim()
-    .split(/\s+/)
-    .slice(0, count)
-    .join(" ");
+  return String(value || "").trim().split(/\s+/).slice(0, count).join(" ");
 }
 
 function slugify(value) {
