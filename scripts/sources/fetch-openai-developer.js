@@ -129,6 +129,7 @@ export function parseOpenAIDeveloperChangelog(html) {
         return;
       }
 
+      const metadata = extractDeveloperMetadata($, entryNodes);
       const title = createTitle(summary);
       const sourceUrl = buildSourceUrl($(dateNode), $(monthHeading));
 
@@ -142,7 +143,7 @@ export function parseOpenAIDeveloperChangelog(html) {
         date,
         datePrecision: "day",
         summary,
-        tags: classifyDeveloperTags(title, summary),
+        tags: classifyDeveloperTags(title, summary, metadata),
         sourceUrl
       });
     });
@@ -184,6 +185,35 @@ function findMonthHeadings($, root) {
   return root.find("h2, h3").filter(function () {
     return MONTH_HEADING_PATTERN.test(cleanText($(this).text()));
   });
+}
+
+function extractDeveloperMetadata($, nodes) {
+  const metadata = { releaseType: "", endpoints: [], models: [] };
+  const endpointNames = new Set();
+  const modelNames = new Set();
+
+  // The OpenAI docs markup can vary. Read leaf text nodes rather
+  // than depending on a particular class name for OpenAI's type badges.
+  for (const node of nodes) {
+    const element = $(node);
+    if (element.children().length || element.is("script, style, svg, img, button")) {
+      continue;
+    }
+    const value = cleanText(element.attr("data-text") || element.text());
+    if (!value || value.length > 120) continue;
+
+    if (!metadata.releaseType && /^(Feature|Update|Fix|Announcement)$/i.test(value)) {
+      metadata.releaseType = value.toLowerCase();
+    }
+    if (/^\/?v\d+\/[\w\-/{}]+$/i.test(value)) endpointNames.add(value);
+    if (/^(?:gpt[-\u2010-\u2015]?\d[\w.\-]*|o[134](?:-[\w.\-]+)?|sora(?:-\d+)?|dall[·-]?e[\w.\-]*)$/i.test(value)) {
+      modelNames.add(value);
+    }
+  }
+
+  metadata.endpoints = Array.from(endpointNames);
+  metadata.models = Array.from(modelNames);
+  return metadata;
 }
 
 function formatEntryContent($, nodes) {
@@ -341,43 +371,97 @@ function createTitle(summary) {
   return firstWords(sentence, 10);
 }
 
-function classifyDeveloperTags(title, summary) {
-  const text = `${title} ${summary}`.toLowerCase();
-  const tags = [];
+function classifyDeveloperTags(title, summary, metadata = {}) {
+  const sections = developerReleaseSections(title, summary);
+  const tags = new Set();
+  const type = String(metadata.releaseType || "").toLowerCase();
+  const hasEndpoint = Array.isArray(metadata.endpoints) && metadata.endpoints.length > 0;
+  const hasModel = Array.isArray(metadata.models) && metadata.models.length > 0;
 
-  if (containsAny(text, ["deprecated", "deprecation", "sunset", "retired", "removed", "discontinued"])) {
-    tags.push("Deprecated");
+  // OpenAI supplies its own release type. This outranks free-text inference.
+  if (type === "feature") tags.add("New feature");
+  if (type === "fix") tags.add("Fixed");
+  if (type === "update") tags.add("Improvement");
+
+  if (sections.some(function (section) {
+    return /\b(?:deprecat(?:ed|ion|ing)|sunset(?:ting)?|retir(?:ed|ing|ement)|discontinu(?:ed|ing)|no longer available|end of support)\b/i.test(section);
+  })) {
+    tags.add("Deprecated");
   }
 
-  if (containsAny(text, ["pricing", "price", "billing", "cost", "charged", "discount"])) {
-    tags.push("Pricing");
+  if (sections.some(function (section) {
+    return /\b(?:new pricing|pricing changes?|pricing updates?|price (?:increase|decrease|reduction|cut|change)|prices? (?:have )?(?:increased|decreased|changed|reduced)|reduced (?:prices?|costs?|rates?)|(?:billing|subscription) rates? (?:changed|increased|decreased)|(?:lower|higher) (?:prices?|rates?))\b/i.test(section);
+  })) {
+    tags.add("Pricing");
   }
 
-  if (containsAny(text, ["fixed", "fix", "bug", "resolved", "issue", "reliability", "stability"])) {
-    tags.push("Fixed");
+  // Fix is an authoritative classification. A passing "verify fixes" should
+  // not cause a Feature entry to be marked as a product bug fix.
+  if (type !== "feature" && sections.some(function (section) {
+    return /\b(?:fixed|resolved|corrected)\s+(?:(?:an?|the|some|several|multiple)\s+)?(?:bugs?|issues?|errors?|crashes?|regressions?|problems?|failures?)\b|\b(?:bug|issue|crash|regression)\s+fix(?:es)?\b/i.test(section);
+  })) {
+    tags.add("Fixed");
   }
 
-  if (containsAny(text, ["model", "gpt-", "realtime", "embedding", "sora", "image model"])) {
-    tags.push("Model update");
+  // A bug in an endpoint used by GPT-5 is NOT necessarily a model release.
+  if (type !== "fix" && (sections.some(isDeveloperModelChange) ||
+    (hasModel && /\b(?:new|launched|released|introduced|available|deprecated|retired|updated model|model update)\b/i.test(summary)))) {
+    tags.add("Model update");
   }
 
-  if (containsAny(text, ["api", "sdk", "endpoint", "responses", "chat completions", "batch", "webhook", "tool calling", "mcp"])) {
-    tags.push("API");
+  // Endpoint badges are structural evidence of API impact, even when
+  // the release prose doesn't literally include the word "API".
+  if (hasEndpoint || sections.some(function (section) {
+    const apiReference = /\b(?:APIs?|SDKs?|endpoints?|webhooks?|response(?:s)? API|chat completions|tool calling|function calling|MCP servers?)\b/i.test(section);
+    const apiChange = /\b(?:new|added|support(?:ed|s)?|launched|released|introduced|updated|improved|deprecated|retired|available|enabled|integrat(?:ed|ion))\b/i.test(section);
+    return apiReference && apiChange;
+  })) {
+    tags.add("API");
   }
 
-  if (containsAny(text, ["released", "launch", "launched", "introduced", "added", "now available", "support for"])) {
-    tags.push("New feature");
+  if (type !== "feature" && sections.some(function (section) {
+    return /\b(?:introducing|introduced|launched|launching|new feature|new capability|now supports?|now available|rolling out|rolled out|you can now|added support for|released|newly available)\b/i.test(section);
+  })) {
+    tags.add("New feature");
   }
 
-  if (containsAny(text, ["updated", "improved", "enhanced", "expanded", "faster", "increased", "redesigned"])) {
-    tags.push("Improvement");
+  if (type !== "fix" && sections.some(function (section) {
+    return /\b(?:improv(?:ed|ement|ements)|enhanc(?:ed|ement|ements)|(?:made|is|are|now) faster|faster|more reliable|more accurate|redesigned|streamlined|simplified|optimized|optimised|expanded support|increased reliability)\b/i.test(section);
+  })) {
+    tags.add("Improvement");
   }
 
-  if (containsAny(text, ["safety", "security", "moderation", "privacy", "compliance", "identity federation"])) {
-    tags.push("Safety");
+  if (sections.some(function (section) {
+    const subject = /\b(?:safety|security|privacy|moderation|guardrails?|data protection|security controls?|privacy controls?|prompt injection protections?)\b/i.test(section);
+    const change = /\b(?:new|added|introduced|launched|updated|enhanced|improved|protect(?:ion|ions)?|prevent|mitigat(?:ed|ion)|strengthened|controls?|settings|guardrails?)\b/i.test(section);
+    return subject && change;
+  })) {
+    tags.add("Safety");
   }
 
-  return tags.length ? Array.from(new Set(tags)) : ["API"];
+  // Do not force "API" when the official entry provides no evidence.
+  return Array.from(tags);
+}
+
+function developerReleaseSections(title, summary) {
+  const sections = String(summary || "")
+    .split(/\n\s*\n/)
+    .map(function (value) { return value.replace(/\s+/g, " ").trim(); })
+    .filter(Boolean);
+  const heading = String(title || "").trim();
+  if (heading && !sections.some(function (part) { return part.startsWith(heading); })) {
+    sections.unshift(heading);
+  }
+  return sections;
+}
+
+function isDeveloperModelChange(section) {
+  // Retiring a user-facing custom GPT is not retiring a foundation model.
+  if (/\bdall[·-]?e\s+gpt\b/i.test(section) && !/\b(?:image generation model|model weights|underlying model)\b/i.test(section)) return false;
+  const mentionsModel = /\b(?:models?|gpt[-\u2010-\u2015]?\d[\w.-]*|o[134](?:[-\u2010-\u2015][\w.-]+)?|sora(?:-\d+)?|dall[·-]?e|image generation model|reasoning model|voice model)\b/i.test(section);
+  const change = /\b(?:add(?:ed|ing)|introduc(?:ed|ing)|launch(?:ed|ing)|releas(?:ed|ing)|now available|new model|updat(?:ed|ing)|upgrad(?:ed|ing)|improv(?:ed|ing)|retir(?:ed|ing)|deprecat(?:ed|ing)|replac(?:ed|ing)|rolling out|rolled out|faster|more accurate)\b/i.test(section);
+  const pickerOnly = /\b(?:model|models)\s+(?:picker|selector|switcher|dropdown|menu|list)\b/i.test(section);
+  return mentionsModel && change && !pickerOnly;
 }
 
 function buildSourceUrl(dateNode, monthHeading) {
@@ -430,12 +514,6 @@ function hasSelectedAncestor(node, selected) {
 function removeConsecutiveDuplicates(lines) {
   return lines.filter(function (line, index) {
     return index === 0 || line !== lines[index - 1];
-  });
-}
-
-function containsAny(text, terms) {
-  return terms.some(function (term) {
-    return text.includes(term);
   });
 }
 

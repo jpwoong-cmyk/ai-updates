@@ -457,139 +457,88 @@ function formatTableAsText($, table) {
 }
 
 function classifyOpenAITags(title, summary) {
-  const text = `${title} ${summary}`.toLowerCase();
-  const tags = [];
+  const sections = releaseSections(title, summary);
+  const tags = new Set();
 
-  if (
-    containsAny(text, [
-      "deprecated",
-      "deprecation",
-      "sunset",
-      "retired",
-      "retiring",
-      "retirement",
-      "removed",
-      "discontinued",
-      "end of support",
-      "no longer available"
-    ])
-  ) {
-    tags.push("Deprecated");
+  // Require an actual change, rather than merely mentioning a term.
+  if (sections.some(function (section) {
+    return /\b(?:deprecat(?:ed|ion|ing)|sunset(?:ting)?|retir(?:ed|ing|ement)|discontinu(?:ed|ing)|no longer available|end of support)\b/i.test(section);
+  })) {
+    tags.add("Deprecated");
   }
 
-  if (
-    containsAny(text, [
-      "pricing",
-      "price",
-      "billing",
-      "cost",
-      "subscription",
-      "plan limit",
-      "usage limit"
-    ])
-  ) {
-    tags.push("Pricing");
+  if (sections.some(function (section) {
+    return /\b(?:new pricing|pricing changes?|pricing updates?|price (?:increase|decrease|reduction|cut|change)|prices? (?:have )?(?:increased|decreased|changed|reduced)|reduced (?:prices?|costs?|rates?)|(?:billing|subscription) rates? (?:changed|increased|decreased)|(?:lower|higher) (?:prices?|rates?))\b/i.test(section);
+  })) {
+    tags.add("Pricing");
   }
 
-  if (
-    containsAny(text, [
-      "fixed",
-      "fix",
-      "bug",
-      "resolved",
-      "issue",
-      "reliability",
-      "stability"
-    ])
-  ) {
-    tags.push("Fixed");
+  if (sections.some(function (section) {
+    return /\b(?:fixed|resolved|corrected)\s+(?:(?:an?|the|some|several|multiple)\s+)?(?:bugs?|issues?|errors?|crashes?|regressions?|problems?|failures?)\b|\b(?:bug|issue|crash|regression)\s+fix(?:es)?\b|\bfix(?:ed|es)?\s+(?:a|the)\s+(?:bug|issue|crash|regression)\b/i.test(section);
+  })) {
+    tags.add("Fixed");
   }
 
-  if (
-    containsAny(text, [
-      "model",
-      "gpt-",
-      "gpt ",
-      "o1",
-      "o3",
-      "o4",
-      "voice model",
-      "reasoning"
-    ])
-  ) {
-    tags.push("Model update");
+  if (sections.some(isModelReleaseChange)) {
+    tags.add("Model update");
   }
 
-  if (
-    containsAny(text, [
-      "api",
-      "sdk",
-      "developer",
-      "endpoint",
-      "function calling",
-      "structured output",
-      "token",
-      "codex"
-    ])
-  ) {
-    tags.push("API");
+  if (sections.some(function (section) {
+    const hasDeveloperInterface = /\b(?:APIs?|SDKs?|endpoints?|webhooks?|tool calling|function calling)\b/i.test(section);
+    const change = /\b(?:new|added|adding|support(?:ed|s)?|launched|released|introduced|updated|changed|improved|deprecated|retired|available|integrat(?:ed|ion))\b/i.test(section);
+    // A passing reference to API credits or an API limitation isn't an API release.
+    return hasDeveloperInterface && change &&
+      !/^.*\b(?:not (?:included|available|supported)|does not include)\b.*\bAPI\b/i.test(section);
+  })) {
+    tags.add("API");
   }
 
-  if (
-    containsAny(text, [
-      "introducing",
-      "introduced",
-      "launch",
-      "launched",
-      "new ",
-      "now available",
-      "rolling out",
-      "added",
-      "support for"
-    ])
-  ) {
-    tags.push("New feature");
+  if (sections.some(function (section) {
+    return /\b(?:introducing|introduced|launched|launching|new feature|new capability|now supports?|now available|rolling out|rolled out|you can now|added support for|newly available)\b/i.test(section);
+  })) {
+    tags.add("New feature");
   }
 
-  if (
-    containsAny(text, [
-      "improved",
-      "improvement",
-      "enhanced",
-      "expanded",
-      "faster",
-      "updated",
-      "upgrade",
-      "upgraded",
-      "simplified"
-    ])
-  ) {
-    tags.push("Improvement");
+  if (sections.some(function (section) {
+    return /\b(?:improv(?:ed|ement|ements)|enhanc(?:ed|ement|ements)|(?:made|is|are|now) faster|faster|more reliable|more accurate|redesigned|streamlined|simplified|optimized|optimised|expanded support|increased reliability)\b/i.test(section);
+  })) {
+    tags.add("Improvement");
   }
 
-  if (
-    containsAny(text, [
-      "safety",
-      "security",
-      "privacy",
-      "compliance",
-      "lockdown mode",
-      "prompt injection",
-      "data protection"
-    ])
-  ) {
-    tags.push("Safety");
+  if (sections.some(isSafetyChange)) {
+    tags.add("Safety");
   }
 
-  return tags.length
-    ? Array.from(new Set(tags))
-    : ["New feature"];
+  // No forced "New feature" fallback. Empty tags are displayed as "Update"
+  // by app.js and remain available under the "All changes" filter.
+  return Array.from(tags);
 }
 
-function containsAny(text, terms) {
-  return terms.some(function (term) {
-    return text.includes(term);
-  });
+function releaseSections(title, summary) {
+  const sections = String(summary || "")
+    .split(/\n\s*\n/)
+    .map(function (value) { return value.replace(/\s+/g, " ").trim(); })
+    .filter(Boolean);
+  const heading = String(title || "").trim();
+  if (heading && !sections.some(function (part) { return part.startsWith(heading); })) {
+    sections.unshift(heading);
+  }
+  return sections;
+}
+
+function isModelReleaseChange(section) {
+  // Retiring a user-facing custom GPT is not retiring a foundation model.
+  if (/\bdall[·-]?e\s+gpt\b/i.test(section) && !/\b(?:image generation model|model weights|underlying model)\b/i.test(section)) return false;
+  const mentionsModel = /\b(?:models?|gpt[-\u2010-\u2015]?\d[\w.-]*|o[134](?:[-\u2010-\u2015][\w.-]+)?|sora(?:-\d+)?|dall[·-]?e|image generation model|reasoning model|voice model)\b/i.test(section);
+  const actualChange = /\b(?:add(?:ed|ing)|introduc(?:ed|ing)|launch(?:ed|ing)|releas(?:ed|ing)|now available|new model|updat(?:ed|ing)|upgrad(?:ed|ing)|improv(?:ed|ing)|retir(?:ed|ing)|deprecat(?:ed|ing)|replac(?:ed|ing)|rolling out|rolled out|faster|more accurate)\b/i.test(section);
+  const pickerOnly = /\b(?:model|models)\s+(?:picker|selector|switcher|dropdown|menu|list)\b/i.test(section);
+  return mentionsModel && actualChange && !pickerOnly;
+}
+
+function isSafetyChange(section) {
+  const protection = /\b(?:safety|security|privacy|moderation|guardrails?|data protection|security controls?|privacy controls?|prompt injection protections?)\b/i.test(section);
+  const change = /\b(?:new|added|introduced|launched|updated|enhanced|improved|protect(?:ion|ions)?|prevent|mitigat(?:ed|ion)|strengthened|controls?|settings|guardrails?)\b/i.test(section);
+  return protection && change;
 }
 
 function firstWords(value, count) {
