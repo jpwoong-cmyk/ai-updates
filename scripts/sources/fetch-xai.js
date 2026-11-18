@@ -22,10 +22,15 @@ const LONG_DATE_PATTERN =
 
 export async function fetchXaiProductChangelog(options = {}) {
   const fetchImpl = options.fetchImpl || globalThis.fetch;
-  if (typeof fetchImpl !== "function") throw new Error("A fetch implementation is required.");
+  if (typeof fetchImpl !== "function") {
+    throw new Error("A fetch implementation is required.");
+  }
 
+  const allEntries = [];
   const failures = [];
-
+  // These are three representations of an intermediary index, not three
+  // independent official feeds. Merge by date/title to avoid losing entries
+  // available in only one representation.
   for (const candidate of RETRIEVAL_CANDIDATES) {
     try {
       const response = await fetchImpl(candidate.url, {
@@ -36,32 +41,27 @@ export async function fetchXaiProductChangelog(options = {}) {
         },
         redirect: "follow"
       });
-
-      if (!response.ok) {
-        failures.push(`${candidate.url}: HTTP ${response.status}`);
-        continue;
-      }
-
+      if (!response.ok) throw new Error("HTTP " + response.status);
       const raw = await response.text();
-      const items =
-        candidate.type === "json"
-          ? parseXaiProductJson(raw)
-          : candidate.type === "markdown"
-            ? parseXaiProductMarkdown(raw)
-            : parseXaiProductHtml(raw);
-
-      if (items.length) return items;
-
-      failures.push(`${candidate.url}: no Grok Release Notes entries found`);
+      const parsed = candidate.type === "json"
+        ? parseXaiProductJson(raw)
+        : candidate.type === "markdown"
+          ? parseXaiProductMarkdown(raw)
+          : parseXaiProductHtml(raw);
+      if (!parsed.length) throw new Error("No dated Grok entries extracted");
+      allEntries.push(...parsed);
     } catch (error) {
-      failures.push(`${candidate.url}: ${error instanceof Error ? error.message : "request failed"}`);
+      failures.push(candidate.url + ": " + (error?.message || String(error)));
     }
   }
 
-  throw new Error(
-    "Grok product release notes could not be loaded. " +
-    `Attempts: ${failures.join(" | ")}`
-  );
+  if (!allEntries.length) {
+    throw new Error("Grok release notes unavailable from the existing index: " + failures.join(" | "));
+  }
+  if (failures.length) {
+    console.warn("Grok Product: some index formats failed:", failures.join(" | "));
+  }
+  return deduplicateEntries(allEntries).sort(sortEntries);
 }
 
 export function parseXaiProductJson(raw) {

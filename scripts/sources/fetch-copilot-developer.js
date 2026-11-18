@@ -25,50 +25,47 @@ const MONTHS = {
 
 export async function fetchCopilotDeveloperChangelog(options = {}) {
   const fetchImpl = options.fetchImpl || globalThis.fetch;
-
   if (typeof fetchImpl !== "function") {
     throw new Error("A fetch implementation is required.");
   }
 
-  const responses = await Promise.all(
-    COPILOT_DEVELOPER_CHANGELOG_URLS.map(async function (url) {
-      const response = await fetchImpl(url, {
-        headers: {
-          Accept: "text/html,application/xhtml+xml",
-          "Accept-Language": "en-US,en;q=0.9",
-          "User-Agent": "Mini-AI-Encyclopedia/1.2 (+https://vercel.com)"
-        },
-        redirect: "follow"
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `Microsoft 365 Copilot developer changelog request failed with HTTP ${response.status} for ${url}.`
-        );
+  const results = await Promise.all(
+    COPILOT_DEVELOPER_CHANGELOG_URLS.map(async (url) => {
+      try {
+        const response = await fetchImpl(url, {
+          headers: {
+            Accept: "text/html,application/xhtml+xml",
+            "Accept-Language": "en-US,en;q=0.9",
+            "User-Agent": "Mini-AI-Encyclopedia/1.2 (+https://vercel.com)"
+          },
+          redirect: "follow"
+        });
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        const items = parseCopilotDeveloperChangelog(await response.text(), url);
+        if (!items.length) throw new Error("No dated releases extracted");
+        return { url, items, error: "" };
+      } catch (error) {
+        return { url, items: [], error: error?.message || String(error) };
       }
-
-      return {
-        url,
-        html: await response.text()
-      };
     })
   );
 
-  const entries = responses.flatMap(function (result) {
-    return parseCopilotDeveloperChangelog(result.html, result.url);
-  });
-
-  const deduplicated = deduplicateEntries(entries).sort(function (first, second) {
-    return second.date.localeCompare(first.date);
-  });
-
-  if (!deduplicated.length) {
+  const entries = deduplicateEntries(results.flatMap((result) => result.items))
+    .sort((first, second) => second.date.localeCompare(first.date));
+  const failures = results.filter((result) => result.error);
+  if (!entries.length) {
     throw new Error(
-      "Microsoft 365 Copilot developer pages were fetched, but no release entries could be extracted."
+      "No Microsoft 365 Copilot developer pages could be parsed: " +
+      failures.map((result) => result.url + ": " + result.error).join(" | ")
     );
   }
-
-  return deduplicated;
+  if (failures.length) {
+    console.warn(
+      "Copilot Developer: some source pages failed:",
+      failures.map((result) => result.url + ": " + result.error).join(" | ")
+    );
+  }
+  return entries;
 }
 
 export function parseCopilotDeveloperChangelog(

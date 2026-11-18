@@ -33,7 +33,6 @@ const MONTHS = {
 
 export async function fetchOpenAIChangelog(options = {}) {
   const fetchImpl = options.fetchImpl || globalThis.fetch;
-
   if (typeof fetchImpl !== "function") {
     throw new Error("A fetch implementation is required.");
   }
@@ -44,31 +43,61 @@ export async function fetchOpenAIChangelog(options = {}) {
     "Cache-Control": "no-cache",
     Pragma: "no-cache",
     Referer: "https://help.openai.com/",
-    "Upgrade-Insecure-Requests": "1",
     "User-Agent":
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-      "AppleWebKit/537.36 (KHTML, like Gecko) " +
-      "Chrome/131.0.0.0 Safari/537.36"
+      "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
   };
-
+  const successes = [];
   const failures = [];
 
+  // The official Help Center may serve different revisions on the normal
+  // article and .json-suffixed routes. Pick the newest parsed changelog.
   for (const url of OPENAI_FETCH_URLS) {
-    const response = await fetchImpl(url, {
-      headers: requestHeaders,
-      redirect: "follow"
-    });
-
-    if (response.ok) {
-      return parseOpenAIChangelog(await response.text());
+    try {
+      const response = await fetchImpl(url, {
+        headers: requestHeaders,
+        redirect: "follow"
+      });
+      if (!response.ok) {
+        failures.push(url + " returned HTTP " + response.status);
+        continue;
+      }
+      const entries = parseOpenAIChangelog(await response.text());
+      successes.push({
+        entries,
+        latestDate: entries[0]?.date || "",
+        route: url
+      });
+    } catch (error) {
+      failures.push(url + ": " + (error?.message || String(error)));
     }
-
-    failures.push(`${url} returned HTTP ${response.status}`);
   }
 
-  throw new Error(
-    `OpenAI Help Center blocked the server-side request. ${failures.join("; ")}`
+  if (!successes.length) {
+    throw new Error("Both official ChatGPT release-note routes failed: " + failures.join("; "));
+  }
+
+  successes.sort((a, b) =>
+    b.latestDate.localeCompare(a.latestDate) ||
+    Number(b.route === OPENAI_CHANGELOG_URL) - Number(a.route === OPENAI_CHANGELOG_URL)
   );
+
+  // Keep unique historical release dates from BOTH official routes. For a
+  // repeated date, prefer the more complete summary; IDs remain unchanged.
+  const byDate = new Map();
+  for (const result of successes) {
+    for (const item of result.entries) {
+      const previous = byDate.get(item.date);
+      if (!previous || item.summary.length > previous.summary.length) {
+        byDate.set(item.date, item);
+      }
+    }
+  }
+  if (failures.length) {
+    console.warn("OpenAI Product: partial source failure:", failures.join(" | "));
+  }
+  return Array.from(byDate.values())
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
 export function parseOpenAIChangelog(html) {

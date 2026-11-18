@@ -39,45 +39,56 @@ export async function fetchGeminiDeveloperChangelog(options = {}) {
     { url: GEMINI_DEVELOPER_CHANGELOG_URL, label: "Google" },
     { url: GEMINI_DEVELOPER_FALLBACK_URL, label: "fallback mirror" }
   ];
+  const successes = [];
   const failures = [];
 
+  // Prefer the official source when current, but check the mirror if Google
+  // returns an older or incomplete server-rendered snapshot.
   for (const source of sources) {
     try {
       const response = await fetchImpl(source.url, {
         headers: {
           Accept: "text/html,text/markdown,text/plain;q=0.9,*/*;q=0.8",
           "Accept-Language": "en-US,en;q=0.9",
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-            "AppleWebKit/537.36 (KHTML, like Gecko) " +
-            "Chrome/131.0.0.0 Safari/537.36"
+          "User-Agent": "Mini-AI-Encyclopedia/1.2 (+https://vercel.com)"
         },
-        redirect: "follow",
-        signal: AbortSignal.timeout(8000)
+        redirect: "follow"
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error("HTTP " + response.status);
 
       const items = parseGeminiDeveloperChangelog(await response.text());
-      if (source.label !== "Google") {
-        console.warn(
-          "Gemini developer changelog: Google returned no usable release notes; " +
-          "using read-only mirror data. Source links still target Google."
-        );
-      }
-      return items;
+      if (!items.length) throw new Error("No dated releases extracted");
+      successes.push({
+        ...source,
+        items,
+        latestDate: items[0]?.date || ""
+      });
     } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      failures.push(`${source.label}: ${reason}`);
+      failures.push(source.label + ": " + (error?.message || String(error)));
     }
   }
 
-  throw new Error(
-    "Gemini API developer feed unavailable after checking Google and the fallback mirror. " +
-    failures.join(" | ").slice(0, 500)
-  );
+  if (!successes.length) {
+    throw new Error(
+      "Gemini API feed unavailable from official and backup routes: " + failures.join(" | ")
+    );
+  }
+
+  // Official Google entries take precedence for duplicates, while the
+  // mirror may contribute older entries missing from Google's HTML snapshot.
+  const official = successes.find((source) => source.label === "Google");
+  const mirror = successes.find((source) => source.label !== "Google");
+  const entries = deduplicateEntries([
+    ...(official?.items || []),
+    ...(mirror?.items || [])
+  ]).sort((a, b) => b.date.localeCompare(a.date));
+
+  if (mirror && (!official || entries.length > official.items.length)) {
+    console.warn(
+      "Gemini Developer: backup mirror contributed release items; verify freshness against Google."
+    );
+  }
+  return entries;
 }
 
 export function parseGeminiDeveloperChangelog(html) {

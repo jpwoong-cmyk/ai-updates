@@ -40,37 +40,42 @@ const MONTH_DATE_PATTERN = new RegExp(
 export async function fetchCopilotChangelog(options = {}) {
   const fetchImpl = options.fetchImpl || globalThis.fetch;
   const urls = Array.isArray(options.urls) && options.urls.length
-    ? options.urls
-    : COPILOT_CHANGELOG_URLS;
-
+    ? options.urls : COPILOT_CHANGELOG_URLS;
   if (typeof fetchImpl !== "function") {
     throw new Error("A fetch implementation is required.");
   }
 
   const pages = [];
-
+  const failures = [];
   for (const sourceUrl of urls) {
-    const response = await fetchImpl(sourceUrl, {
-      headers: {
-        Accept: "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9",
-        "User-Agent": "Mini-AI-Encyclopedia/1.2 (+https://vercel.com)"
-      },
-      redirect: "follow"
-    });
+    try {
+      const response = await fetchImpl(sourceUrl, {
+        headers: {
+          Accept: "text/html,application/xhtml+xml",
+          "Accept-Language": "en-US,en;q=0.9",
+          "User-Agent": "Mini-AI-Encyclopedia/1.2 (+https://vercel.com)"
+        },
+        redirect: "follow"
+      });
+      if (!response.ok) throw new Error("HTTP " + response.status);
 
-    if (!response.ok) {
-      throw new Error(
-        `Microsoft 365 Copilot changelog request failed for ${sourceUrl} with HTTP ${response.status}.`
-      );
+      const html = await response.text();
+      // Check the individual source before putting it into the merge. A broken
+      // archive should not take down today's working Copilot release notes.
+      const entries = parseCopilotChangelog(html, { sourceUrl });
+      if (!entries.length) throw new Error("No dated release entries");
+      pages.push({ html, sourceUrl });
+    } catch (error) {
+      failures.push(sourceUrl + ": " + (error?.message || String(error)));
     }
-
-    pages.push({
-      html: await response.text(),
-      sourceUrl
-    });
   }
 
+  if (!pages.length) {
+    throw new Error("No Microsoft 365 Copilot release pages could be parsed: " + failures.join(" | "));
+  }
+  if (failures.length) {
+    console.warn("Copilot Product: some release-note pages failed:", failures.join(" | "));
+  }
   return mergeCopilotChangelogPages(pages);
 }
 
