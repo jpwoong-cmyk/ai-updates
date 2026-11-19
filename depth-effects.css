@@ -1,0 +1,211 @@
+/*
+ * NewsAI XARC: cinematic command-center depth
+ * Progressive enhancement only. No changes to source feeds or application logic.
+ * This file intentionally loads AFTER the existing stylesheets.
+ */
+
+/* Keep the decorative stage behind content without changing existing z-indexes. */
+.xarcDepthScene {
+  --xarc-far-x: 0px;
+  --xarc-far-y: 0px;
+  --xarc-grid-x: 0px;
+  --xarc-grid-y: 0px;
+  --xarc-circuit-x: 0px;
+  --xarc-circuit-y: 0px;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  contain: layout paint;
+  isolation: isolate;
+}
+
+/* Existing app, navigation and footer remain the foreground. */
+.pageShell,
+.siteFooter {
+  position: relative;
+  z-index: 1;
+}
+
+.xarcDepthScene > span {
+  position: absolute;
+  display: block;
+  pointer-events: none;
+}
+
+/* Layer 1: distant, low-contrast illumination. */
+.xarcDepthFar {
+  inset: -10%;
+  background:
+    radial-gradient(ellipse 48% 40% at 47% 9%, rgba(91, 112, 195, 0.13), transparent 100%),
+    radial-gradient(ellipse 25% 31% at 88% 50%, rgba(50, 113, 135, 0.09), transparent 100%),
+    radial-gradient(ellipse 35% 31% at 8% 80%, rgba(90, 68, 135, 0.07), transparent 100%);
+  opacity: 0.78;
+  transform: translate3d(var(--xarc-far-x), var(--xarc-far-y), 0);
+  animation: xarcAmbientBreath 24s ease-in-out infinite alternate;
+}
+
+/* Layer 2: receding architectural grid, subdued to avoid visual noise. */
+.xarcDepthGrid {
+  top: 19%;
+  right: -30%;
+  bottom: -39%;
+  left: -30%;
+  background-image:
+    linear-gradient(to right, rgba(94, 136, 181, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(94, 136, 181, 0.12) 1px, transparent 1px);
+  background-size: 86px 86px;
+  opacity: 0.37;
+  transform-origin: 50% 100%;
+  transform:
+    translate3d(var(--xarc-grid-x), var(--xarc-grid-y), 0)
+    perspective(900px) rotateX(64deg) scale(1.16);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 2%, #000 35%, #000 76%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 2%, #000 35%, #000 76%, transparent 100%);
+}
+
+/* Layer 3: sparse circuit traces, not a busy animated dashboard. */
+.xarcDepthCircuits {
+  inset: -5%;
+  background:
+    radial-gradient(circle at 13% 28%, rgba(155, 178, 230, 0.8) 0 1px, transparent 2px),
+    radial-gradient(circle at 84% 38%, rgba(155, 178, 230, 0.8) 0 1px, transparent 2px),
+    radial-gradient(circle at 72% 78%, rgba(155, 178, 230, 0.65) 0 1px, transparent 2px),
+    linear-gradient(to right, transparent 13%, rgba(103, 139, 184, 0.12) 13%, rgba(103, 139, 184, 0.12) 13.1%, transparent 13.1%),
+    linear-gradient(to right, transparent 84%, rgba(103, 139, 184, 0.10) 84%, rgba(103, 139, 184, 0.10) 84.1%, transparent 84.1%),
+    linear-gradient(to bottom, transparent 28%, rgba(103, 139, 184, 0.12) 28%, rgba(103, 139, 184, 0.12) 28.1%, transparent 28.1%),
+    linear-gradient(to bottom, transparent 78%, rgba(103, 139, 184, 0.09) 78%, rgba(103, 139, 184, 0.09) 78.1%, transparent 78.1%);
+  opacity: 0.29;
+  transform: translate3d(var(--xarc-circuit-x), var(--xarc-circuit-y), 0);
+  animation: xarcSignalBreath 19s ease-in-out infinite alternate;
+  -webkit-mask-image: radial-gradient(ellipse 72% 74% at 50% 48%, #000 15%, transparent 100%);
+  mask-image: radial-gradient(ellipse 72% 74% at 50% 48%, #000 15%, transparent 100%);
+}
+
+/* Layer 4: optical falloff gives the whole viewport a recessed horizon. */
+.xarcDepthVignette {
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgba(7, 9, 16, 0.03) 5%, transparent 35%, rgba(7, 9, 16, 0.32) 100%),
+    radial-gradient(ellipse at center, transparent 39%, rgba(7, 9, 16, 0.37) 100%);
+}
+
+/* Existing hero remains recognizable, now sitting in a recessed frame. */
+.hero {
+  border-inline: 1px solid rgba(141, 166, 215, 0.06);
+  background: linear-gradient(
+    to bottom,
+    rgba(11, 17, 29, 0.14),
+    rgba(8, 12, 22, 0.045) 48%,
+    rgba(8, 12, 22, 0.12)
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(160, 187, 246, 0.075),
+    inset 0 -1px 0 rgba(160, 187, 246, 0.04),
+    0 24px 80px rgba(0, 0, 0, 0.12);
+}
+
+/* A faint 'platform' below the existing selectable robot orbs. */
+.providerOrbitNav {
+  background: radial-gradient(ellipse 55% 52% at 50% 49%, rgba(84, 108, 165, 0.09), transparent 100%);
+}
+
+/* Existing archive grouping and expanders remain intact. Add surface depth only. */
+.archiveSection {
+  box-shadow: inset 0 1px 0 rgba(131, 160, 213, 0.055);
+  background: linear-gradient(to bottom, rgba(10, 16, 28, 0.13), transparent 260px);
+}
+
+.changeDateGroup {
+  background: linear-gradient(112deg, rgba(18, 25, 42, 0.31), rgba(8, 12, 22, 0.12) 77%);
+  box-shadow:
+    inset 1px 0 0 rgba(154, 178, 223, 0.045),
+    inset -1px 0 0 rgba(154, 178, 223, 0.025),
+    0 9px 28px rgba(0, 0, 0, 0.09);
+  transition: box-shadow 320ms ease, border-color 320ms ease;
+}
+
+.changeDateGroup:hover,
+.changeDateGroup:focus-within {
+  box-shadow:
+    inset 1px 0 0 rgba(154, 178, 223, 0.11),
+    inset -1px 0 0 rgba(154, 178, 223, 0.045),
+    0 16px 34px rgba(0, 0, 0, 0.16);
+}
+
+.changeDateGroup.isExpanded {
+  box-shadow:
+    inset 1px 0 0 rgba(154, 178, 223, 0.12),
+    0 21px 50px rgba(0, 0, 0, 0.21);
+}
+
+@keyframes xarcAmbientBreath {
+  from { opacity: 0.65; }
+  to { opacity: 0.93; }
+}
+
+@keyframes xarcSignalBreath {
+  from { opacity: 0.16; }
+  to { opacity: 0.29; }
+}
+
+/* Tablet: preserve 3-D composition, reduce overlays and disable pointer drift. */
+@media (min-width: 761px) and (max-width: 1023px) {
+  .xarcDepthFar { animation: none; }
+  .xarcDepthGrid { opacity: 0.22; }
+  .xarcDepthCircuits { opacity: 0.15; animation: none; }
+}
+
+/* Phone: a static depth backdrop, no parallax or endless GPU animation. */
+@media (max-width: 760px) {
+  .xarcDepthFar {
+    opacity: 0.57;
+    animation: none;
+  }
+
+  .xarcDepthGrid {
+    top: 42%;
+    right: -60%;
+    bottom: -22%;
+    left: -60%;
+    opacity: 0.16;
+    transform: perspective(760px) rotateX(68deg) scale(1.15);
+  }
+
+  .xarcDepthScene > .xarcDepthCircuits { display: none; }
+
+  .hero {
+    border-inline: 0;
+    box-shadow: inset 0 1px 0 rgba(160, 187, 246, 0.04);
+  }
+
+  .providerOrbitNav {
+    background: none;
+  }
+
+  .changeDateGroup {
+    box-shadow: inset 1px 0 0 rgba(154, 178, 223, 0.04);
+  }
+
+  .changeDateGroup:hover,
+  .changeDateGroup:focus-within,
+  .changeDateGroup.isExpanded {
+    box-shadow: inset 1px 0 0 rgba(154, 178, 223, 0.08);
+  }
+}
+
+/* System accessibility settings take precedence over visual direction. */
+@media (prefers-reduced-motion: reduce) {
+  .xarcDepthFar,
+  .xarcDepthCircuits {
+    animation: none !important;
+  }
+
+  .changeDateGroup { transition: none; }
+}
+
+@media print {
+  .xarcDepthScene { display: none; }
+}
